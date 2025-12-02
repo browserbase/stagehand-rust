@@ -10,7 +10,7 @@
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use stagehand_sdk::{Model, Stagehand, Transport, V3Options};
+use stagehand_sdk::{Env, Model, Stagehand, Transport, V3Options};
 use std::collections::HashMap;
 
 /// Schema for extracting links from the page
@@ -40,7 +40,7 @@ async fn test_stagehand_cloud_integration(
 
     // 1. Connect to Stagehand cloud API using REST transport
     let api_base = std::env::var("STAGEHAND_API_URL")
-        .unwrap_or_else(|_| "https://api.stagehand.dev".to_string());
+        .unwrap_or_else(|_| "https://api.stagehand.browserbase.com/v1".to_string());
 
     println!("Connecting to Stagehand API at: {}", api_base);
 
@@ -52,6 +52,7 @@ async fn test_stagehand_cloud_integration(
 
     // 2. Initialize Stagehand - this creates a Browserbase session
     let init_opts = V3Options {
+        env: Some(Env::Browserbase),
         model: Some(Model::String("openai/gpt-4o".into())),
         verbose: Some(2),
         ..Default::default()
@@ -229,10 +230,9 @@ async fn test_stagehand_cloud_integration(
 /// Simpler test that just verifies chromiumoxide can launch and navigate
 #[tokio::test]
 async fn test_chromiumoxide_basic() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Launch browser
+    // Launch browser in headless mode for reliability
     let (mut browser, mut handler) = Browser::launch(
         BrowserConfig::builder()
-            .with_head()
             .window_size(1280, 720)
             .build()
             .map_err(|e| format!("Failed to build config: {}", e))?,
