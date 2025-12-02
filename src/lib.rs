@@ -343,63 +343,71 @@ impl StagehandRestApiClient {
 
         let s = stream! {
             loop {
-                match tokio::time::timeout(Duration::from_secs(60), stream.next()).await {
-                    Ok(Some(event)) => {
-                        match event {
-                            Ok(sse_event) => {
-                                match sse_event {
-                                    SSE::Event(event) => {
-                                        match serde_json::from_str::<serde_json::Value>(&event.data) {
-                                            Ok(event_data) => {
-                                                if let Some(event_type) = event_data["type"].as_str() {
-                                                    match event_type {
-                                                        "system" => {
-                                                            if let Some(status) = event_data["data"]["status"].as_str() {
-                                                                match status {
-                                                                    "error" => {
-                                                                        let error_msg = event_data["data"]["error"].as_str().unwrap_or("Unknown server error").to_string();
-                                                                        yield Err(tonic::Status::internal(error_msg));
-                                                                        break; // Terminate loop
-                                                                    },
-                                                                    "finished" => {
-                                                                        let result = serde_json::from_value::<P>(event_data["data"]["result"].clone());
-                                                                        match result {
-                                                                            Ok(res) => yield Ok(res),
-                                                                            Err(e) => yield Err(tonic::Status::internal(format!("Failed to parse final result: {}", e))),
-                                                                        }
-                                                                        break; // Terminate loop
-                                                                    },
-                                                                    _ => {}
-                                                                }
-                                                            }
-                                                        },
-                                                        "log" => {
-                                                            if let Ok(log_line) = serde_json::from_value::<LogLine>(event_data["data"].clone()) {
-                                                                yield Err(tonic::Status::unimplemented(format!("Log message from REST: [{}]{}", log_line.category, log_line.message)));
-                                                            }
-                                                        },
-                                                        _ => {}
-                                                    }
-                                                }
-                                            },
-                                            Err(e) => yield Err(tonic::Status::internal(format!("Failed to parse SSE event data: {}", e))),
-                                        }
-                                    },
-                                    SSE::Comment(_) => {},
-                                    SSE::Connected(_) => {},
-                                }
-                            },
-                            Err(e) => {
-                                yield Err(tonic::Status::internal(format!("EventSource error: {}", e)));
-                                break;
-                            }
-                        }
-                    },
-                    Ok(None) => break, // Stream finished
-                    Err(_) => { // Timeout
-                        yield Err(tonic::Status::deadline_exceeded("Stream timed out after 60 seconds of inactivity."));
+                // Wait for next event with timeout
+                let event = match tokio::time::timeout(Duration::from_secs(60), stream.next()).await {
+                    Ok(Some(event)) => event,
+                    Ok(None) => break,
+                    Err(_) => {
+                        yield Err(tonic::Status::deadline_exceeded("Stream timed out"));
                         break;
                     }
+                };
+
+                // Handle SSE client errors
+                let sse_event = match event {
+                    Ok(e) => e,
+                    Err(e) => {
+                        yield Err(tonic::Status::internal(format!("EventSource error: {}", e)));
+                        break;
+                    }
+                };
+
+                // Only process SSE::Event, ignore comments and connection events
+                let event_data_str = match sse_event {
+                    SSE::Event(e) => e.data,
+                    SSE::Comment(_) | SSE::Connected(_) => continue,
+                };
+
+                // Parse the JSON event data
+                let event_data: serde_json::Value = match serde_json::from_str(&event_data_str) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        yield Err(tonic::Status::internal(format!("Failed to parse SSE data: {}", e)));
+                        continue;
+                    }
+                };
+
+                // Route based on event type
+                let event_type = match event_data["type"].as_str() {
+                    Some(t) => t,
+                    None => continue,
+                };
+
+                match event_type {
+                    "system" => {
+                        let status = event_data["data"]["status"].as_str().unwrap_or("");
+                        match status {
+                            "error" => {
+                                let msg = event_data["data"]["error"].as_str().unwrap_or("Unknown error");
+                                yield Err(tonic::Status::internal(msg.to_string()));
+                                break;
+                            }
+                            "finished" => {
+                                match serde_json::from_value::<P>(event_data["data"]["result"].clone()) {
+                                    Ok(res) => yield Ok(res),
+                                    Err(e) => yield Err(tonic::Status::internal(format!("Failed to parse result: {}", e))),
+                                }
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                    "log" => {
+                        if let Ok(log) = serde_json::from_value::<LogLine>(event_data["data"].clone()) {
+                            yield Err(tonic::Status::unimplemented(format!("[{}] {}", log.category, log.message)));
+                        }
+                    }
+                    _ => {}
                 }
             }
         };
@@ -533,7 +541,7 @@ impl Stagehand {
                     model: model.map(|m| m.into()),
                     variables,
                     timeout_ms: timeout_ms.map(|t| t as i32),
-                    frame_id: frame_id.clone(),
+                    frame_id,
                 };
 
                 let response = client.act(req).await?;
@@ -543,7 +551,7 @@ impl Stagehand {
                 let mut rest_client = client.clone();
                 let session_id = rest_client.session_id.as_ref().ok_or_else(|| tonic::Status::internal("Session ID is missing for REST API Act call"))?.clone();
                 let path = format!("/sessions/{}/act", session_id);
-
+                
                 let instruction_str = instruction.into();
                 let payload = ActRequestPayload {
                     input: &instruction_str,
