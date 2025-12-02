@@ -106,6 +106,7 @@ message ActRequest {
   optional ModelConfiguration model = 2;
   map<string, string> variables = 3;
   optional int32 timeout_ms = 4;
+  optional string frame_id = 5;
 }
 
 message ActResponse {
@@ -121,6 +122,7 @@ message ExtractRequest {
   optional ModelConfiguration model = 3;
   optional int32 timeout_ms = 4;
   optional string selector = 5;
+  optional string frame_id = 6;
 }
 
 message ExtractResponse {
@@ -136,6 +138,7 @@ message ObserveRequest {
   optional int32 timeout_ms = 3;
   optional string selector = 4;
   repeated string only_selectors = 5;
+  optional string frame_id = 6;
 }
 
 message ObserveResponse {

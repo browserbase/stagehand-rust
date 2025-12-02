@@ -533,6 +533,7 @@ impl Stagehand {
                     model: model.map(|m| m.into()),
                     variables,
                     timeout_ms: timeout_ms.map(|t| t as i32),
+                    frame_id: frame_id.clone(),
                 };
 
                 let response = client.act(req).await?;
@@ -542,7 +543,7 @@ impl Stagehand {
                 let mut rest_client = client.clone();
                 let session_id = rest_client.session_id.as_ref().ok_or_else(|| tonic::Status::internal("Session ID is missing for REST API Act call"))?.clone();
                 let path = format!("/sessions/{}/act", session_id);
-                
+
                 let instruction_str = instruction.into();
                 let payload = ActRequestPayload {
                     input: &instruction_str,
@@ -585,6 +586,7 @@ impl Stagehand {
                     model: model.map(|m| m.into()),
                     timeout_ms: timeout_ms.map(|t| t as i32),
                     selector,
+                    frame_id,
                 };
 
                 let response = client.extract(req).await?;
@@ -636,6 +638,7 @@ impl Stagehand {
                     timeout_ms: timeout_ms.map(|t| t as i32),
                     selector,
                     only_selectors,
+                    frame_id,
                 };
 
                 let response = client.observe(req).await?;
