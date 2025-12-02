@@ -12,10 +12,8 @@ struct MovieInfo {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Set environment variables for API keys if using REST transport
-    std::env::set_var("BROWSERBASE_API_KEY", "bb_live_qnzgygVsuPHJTiBkfPVxoUypSp8");
-    std::env::set_var("BROWSERBASE_PROJECT_ID", "2b648897-a538-40b0-96d7-744ee6664341");
-    std::env::set_var("OPENAI_API_KEY", "YOUR_OPENAI_API_KEY");
+    // Load .env file
+    dotenvy::dotenv().ok();
 
     // 1. Create client, specifying REST transport
     let mut stagehand = Stagehand::connect(
@@ -30,34 +28,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         ..Default::default()
     };
 
-    // 3. Init with Progress Logging
+    // 3. Init and capture session_id
     println!("Initializing...");
-    let mut init_stream = stagehand.init(opts).await?;
-    
-    let mut session_id = String::new(); // Session ID is now handled internally by the transport
-
-    while let Some(msg) = init_stream.next().await {
-        if let Ok(event) = msg {
-            match event.event {
-                Some(stagehand_sdk::proto::init_response::Event::Log(l)) => {
-                    println!("[INIT LOG] {:?}", l);
-                },
-                Some(stagehand_sdk::proto::init_response::Event::Result(res)) => {
-                    println!("Initialization Complete. Session ID (from event): {}", res.unused);
-                    session_id = res.unused.clone(); // Still useful to have for execute
-                }
-                _ => {}
-            }
-        } else if let Err(e) = msg {
-            eprintln!("Init stream error: {:?}", e);
-            return Err(e.into());
-        }
-    }
-
-    if session_id.is_empty() {
-        // This check might be less reliable now, but we keep it for execute
-        println!("Warning: Could not get session_id from init stream.");
-    }
+    stagehand.init(opts).await?;
+    println!("Initialization Complete.");
 
     // 4. Act
     let mut act_stream = stagehand.act(
@@ -118,7 +92,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     };
 
     let mut execute_stream = stagehand.execute(
-        session_id.clone(), // Execute still needs session_id passed in
         agent_execute_options.instruction.clone(),
         agent_execute_options.page.clone(),
         None,

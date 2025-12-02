@@ -10,7 +10,7 @@
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use stagehand_sdk::{Env, Model, Stagehand, Transport, V3Options};
+use stagehand_sdk::{Env, Model, Stagehand, TransportChoice, V3Options};
 use std::collections::HashMap;
 
 /// Schema for extracting links from the page
@@ -44,11 +44,7 @@ async fn test_stagehand_cloud_integration(
 
     println!("Connecting to Stagehand API at: {}", api_base);
 
-    let mut stagehand = Stagehand::connect(
-        api_base.clone(),
-        Transport::Rest(api_base),
-    )
-    .await?;
+    let mut stagehand = Stagehand::connect(TransportChoice::Rest(api_base)).await?;
 
     // 2. Initialize Stagehand - this creates a Browserbase session
     let init_opts = V3Options {
@@ -59,25 +55,8 @@ async fn test_stagehand_cloud_integration(
     };
 
     println!("Initializing Stagehand session...");
-    let mut init_stream = stagehand.init(init_opts).await?;
-    while let Some(res) = init_stream.next().await {
-        match res {
-            Ok(init_response) => {
-                if let Some(stagehand_sdk::proto::init_response::Event::Result(result)) =
-                    init_response.event
-                {
-                    println!("Stagehand initialization complete. Session: {}", result.unused);
-                } else if let Some(stagehand_sdk::proto::init_response::Event::Log(log)) =
-                    init_response.event
-                {
-                    println!("[INIT LOG] [{}] {}", log.category, log.message);
-                }
-            }
-            Err(e) => {
-                eprintln!("Initialization stream error: {:?}", e);
-            }
-        }
-    }
+    stagehand.init(init_opts).await?;
+    println!("Stagehand initialization complete.");
 
     // 3. Navigate to example.com using act
     println!("\n--- Navigating to example.com ---");
