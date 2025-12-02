@@ -1,0 +1,23 @@
+[package]
+name = "stagehand-sdk"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tonic = "0.10"
+prost = "0.12"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+futures = "0.3"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+tokio-stream = "0.1"
+async-stream = "0.3"
+tokio-util = { version = "0.7", features = ["codec", "io"] }
+bytes = "1"
+eventsource-client = "0.15.1"
+futures-util = "0.3.31"
+dotenvy = "0.15"
+
+[build-dependencies]
+tonic-build = "0.10"

@@ -1,0 +1,172 @@
+syntax = "proto3";
+package stagehand.v1;
+
+service StagehandService {
+  // maps to stagehand.init()
+  rpc Init (InitRequest) returns (stream InitResponse);
+  
+  // maps to stagehand.act()
+  rpc Act (ActRequest) returns (stream ActResponse);
+  
+  // maps to stagehand.extract()
+  rpc Extract (ExtractRequest) returns (stream ExtractResponse);
+  
+  // maps to stagehand.observe()
+  rpc Observe (ObserveRequest) returns (stream ObserveResponse);
+
+  // Dispatches an Execute event
+  rpc Execute (ExecuteRequest) returns (stream ExecuteResponse);
+  
+  // maps to stagehand.close()
+  rpc Close (CloseRequest) returns (CloseResponse);
+}
+
+// --- Configuration Types ---
+
+message InitRequest {
+  string env = 1; // "LOCAL" | "BROWSERBASE"
+  
+  // Browserbase Options
+  optional string api_key = 2;
+  optional string project_id = 3;
+  optional string browserbase_session_id = 4;
+  optional string browserbase_session_create_params_json = 5; // JSON string
+
+  // Local Browser Options
+  optional LocalBrowserLaunchOptions local_browser_launch_options = 6;
+
+  // AI Configuration
+  optional ModelConfiguration model = 7;
+  optional string system_prompt = 8;
+
+  // Behavior
+  optional bool self_heal = 9;
+  optional bool experimental = 10;
+  optional int32 dom_settle_timeout_ms = 11;
+  optional string cache_dir = 12;
+
+  // Logging
+  optional int32 verbose = 13; // 0, 1, 2
+  optional bool log_inference_to_file = 14;
+  optional bool disable_pino = 15;
+}
+
+message LocalBrowserLaunchOptions {
+  optional bool headless = 1;
+  optional string executable_path = 2;
+  repeated string args = 3;
+  optional string user_data_dir = 4;
+  optional Viewport viewport = 5;
+  optional bool devtools = 6;
+  optional Proxy proxy = 7;
+  optional bool ignore_https_errors = 8;
+  optional string cdp_url = 9;
+}
+
+message Viewport {
+  int32 width = 1;
+  int32 height = 2;
+}
+
+message Proxy {
+  string server = 1;
+  optional string bypass = 2;
+  optional string username = 3;
+  optional string password = 4;
+}
+
+message ModelConfiguration {
+  oneof config {
+    string model_string = 1; // e.g. "openai/gpt-4o"
+    ModelObj model_obj = 2;
+  }
+}
+
+message ModelObj {
+  string model_name = 1;
+  optional string api_key = 2;
+  optional string base_url = 3;
+}
+
+// --- Method Requests/Responses ---
+
+message InitResponse {
+  oneof event {
+    LogLine log = 1;
+    InitResult result = 2;
+  }
+}
+
+message InitResult {
+  string unused = 1; // Empty success signal, or session ID if relevant
+}
+
+message ActRequest {
+  string instruction = 1;
+  optional ModelConfiguration model = 2;
+  map<string, string> variables = 3;
+  optional int32 timeout_ms = 4;
+}
+
+message ActResponse {
+  oneof event {
+    LogLine log = 1;
+    bool success = 2;
+  }
+}
+
+message ExtractRequest {
+  string instruction = 1;
+  string schema_json = 2; // Zod schema serialized
+  optional ModelConfiguration model = 3;
+  optional int32 timeout_ms = 4;
+  optional string selector = 5;
+}
+
+message ExtractResponse {
+  oneof event {
+    LogLine log = 1;
+    string data_json = 2; // Result data
+  }
+}
+
+message ObserveRequest {
+  optional string instruction = 1;
+  optional ModelConfiguration model = 2;
+  optional int32 timeout_ms = 3;
+  optional string selector = 4;
+  repeated string only_selectors = 5;
+}
+
+message ObserveResponse {
+  oneof event {
+    LogLine log = 1;
+    string elements_json = 2; // Result data
+  }
+}
+
+message ExecuteRequest {
+  string session_id = 1;
+  string code = 2; // JS code to execute
+}
+
+message ExecuteResponse {
+  oneof event {
+    string progress = 1;
+    string result = 2;
+  }
+}
+
+message CloseRequest {
+  bool force = 1;
+}
+
+message CloseResponse {
+  bool success = 1;
+}
+
+message LogLine {
+  string category = 1;
+  string message = 2;
+  optional string auxiliary = 3; // JSON string of extra details
+}
