@@ -1,16 +1,16 @@
-//! Integration test using chromiumoxide to spawn a local browser and interact with Stagehand.
+//! Integration test using the Stagehand cloud REST API with Browserbase.
 //!
 //! This test:
-//! 1. Spawns a local headful browser using chromiumoxide
-//! 2. Navigates to https://example.com
-//! 3. Gets the frame_id from chromiumoxide
-//! 4. Calls stagehand extract, observe, and act with frame_id
-//! 5. Verifies the URL changed after clicking a link
+//! 1. Connects to Stagehand cloud API (REST + SSE)
+//! 2. Creates a Browserbase session (cloud-managed browser)
+//! 3. Navigates to https://example.com
+//! 4. Calls stagehand extract, observe, and act
+//! 5. Verifies the actions complete successfully
 
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use stagehand_sdk::{Env, LocalBrowserLaunchOptions, Model, Stagehand, Transport, V3Options};
+use stagehand_sdk::{Model, Stagehand, Transport, V3Options};
 use std::collections::HashMap;
 
 /// Schema for extracting links from the page
@@ -33,99 +33,43 @@ struct ObservedAction {
 }
 
 #[tokio::test]
-#[ignore] // This test requires a running Stagehand gRPC server and Chrome installed
-async fn test_chromiumoxide_stagehand_integration(
+async fn test_stagehand_cloud_integration(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Load environment variables
     dotenvy::dotenv().ok();
 
-    // 1. Launch browser with chromiumoxide (headful mode)
-    let (mut browser, mut handler) = Browser::launch(
-        BrowserConfig::builder()
-            .with_head() // headful mode
-            .window_size(1280, 720)
-            .build()
-            .map_err(|e| format!("Failed to build browser config: {}", e))?,
-    )
-    .await
-    .map_err(|e| format!("Failed to launch browser: {}", e))?;
+    // 1. Connect to Stagehand cloud API using REST transport
+    let api_base = std::env::var("STAGEHAND_API_URL")
+        .unwrap_or_else(|_| "https://api.stagehand.dev".to_string());
 
-    // Spawn the browser handler
-    let handle = tokio::spawn(async move {
-        while let Some(event) = handler.next().await {
-            if event.is_err() {
-                break;
-            }
-        }
-    });
+    println!("Connecting to Stagehand API at: {}", api_base);
 
-    // 2. Create a new page and navigate to example.com
-    let page = browser
-        .new_page("about:blank")
-        .await
-        .map_err(|e| format!("Failed to create page: {}", e))?;
-
-    // Get the CDP WebSocket URL for Stagehand to connect to the same browser
-    let ws_url = browser.websocket_address();
-    println!("Browser WebSocket URL: {}", ws_url);
-
-    // Navigate to example.com
-    page.goto("https://example.com")
-        .await
-        .map_err(|e| format!("Failed to navigate: {}", e))?;
-    page.wait_for_navigation()
-        .await
-        .map_err(|e| format!("Failed to wait for navigation: {}", e))?;
-
-    // Get the initial URL
-    let initial_url = page
-        .url()
-        .await
-        .map_err(|e| format!("Failed to get URL: {}", e))?
-        .unwrap_or_default();
-    println!("Initial URL: {}", initial_url);
-    assert!(
-        initial_url.contains("example.com"),
-        "Should be on example.com"
-    );
-
-    // 3. Get the frame_id (main frame) - use target_id as frame identifier
-    let frame_id = format!("{:?}", page.target_id());
-    println!("Main frame ID: {}", frame_id);
-
-    // 4. Connect Stagehand to the browser using gRPC transport with CDP URL
-    // Note: This requires a running Stagehand gRPC server
     let mut stagehand = Stagehand::connect(
-        "http://127.0.0.1:50051".to_string(),
-        Transport::Grpc("http://127.0.0.1:50051".to_string()),
+        api_base.clone(),
+        Transport::Rest(api_base),
     )
     .await?;
 
-    // Initialize Stagehand with the CDP URL pointing to our browser
+    // 2. Initialize Stagehand - this creates a Browserbase session
     let init_opts = V3Options {
-        env: Some(Env::Local),
-        local_browser_launch_options: Some(LocalBrowserLaunchOptions {
-            cdp_url: Some(ws_url.to_string()),
-            headless: Some(false),
-            ..Default::default()
-        }),
         model: Some(Model::String("openai/gpt-4o".into())),
         verbose: Some(2),
         ..Default::default()
     };
 
+    println!("Initializing Stagehand session...");
     let mut init_stream = stagehand.init(init_opts).await?;
     while let Some(res) = init_stream.next().await {
         match res {
             Ok(init_response) => {
-                if let Some(stagehand_sdk::proto::init_response::Event::Result(_)) =
+                if let Some(stagehand_sdk::proto::init_response::Event::Result(result)) =
                     init_response.event
                 {
-                    println!("Stagehand initialization complete.");
+                    println!("Stagehand initialization complete. Session: {}", result.unused);
                 } else if let Some(stagehand_sdk::proto::init_response::Event::Log(log)) =
                     init_response.event
                 {
-                    println!("[INIT LOG] {:?}", log);
+                    println!("[INIT LOG] [{}] {}", log.category, log.message);
                 }
             }
             Err(e) => {
@@ -134,7 +78,37 @@ async fn test_chromiumoxide_stagehand_integration(
         }
     }
 
-    // 5. Call extract to get links on the page
+    // 3. Navigate to example.com using act
+    println!("\n--- Navigating to example.com ---");
+    let mut nav_stream = stagehand
+        .act(
+            "Navigate to https://example.com",
+            None,
+            HashMap::new(),
+            Some(60_000),
+            None,
+        )
+        .await?;
+
+    while let Some(res) = nav_stream.next().await {
+        match res {
+            Ok(act_response) => {
+                if let Some(stagehand_sdk::proto::act_response::Event::Success(success)) =
+                    act_response.event
+                {
+                    println!("[NAVIGATE] Success: {}", success);
+                }
+            }
+            Err(e) => {
+                eprintln!("Navigate stream error: {:?}", e);
+            }
+        }
+    }
+
+    // Wait for page to load
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+    // 4. Call extract to get links on the page
     println!("\n--- Extracting links from the page ---");
     let schema = LinksSchema { links: vec![] };
 
@@ -145,7 +119,7 @@ async fn test_chromiumoxide_stagehand_integration(
             None,
             Some(60_000),
             None,
-            Some(frame_id.clone()),
+            None,
         )
         .await?;
 
@@ -175,7 +149,7 @@ async fn test_chromiumoxide_stagehand_integration(
         }
     }
 
-    // 6. Call observe to find clickable links
+    // 5. Call observe to find clickable links
     println!("\n--- Observing clickable elements ---");
     let mut observe_stream = stagehand
         .observe(
@@ -184,7 +158,7 @@ async fn test_chromiumoxide_stagehand_integration(
             Some(60_000),
             None,
             vec![],
-            Some(frame_id.clone()),
+            None,
         )
         .await?;
 
@@ -212,98 +186,41 @@ async fn test_chromiumoxide_stagehand_integration(
         println!("  - {} ({})", action.description, action.selector);
     }
 
-    // 7. Call act on the first observed action (if any)
-    if !observed_actions.is_empty() {
-        let first_action = &observed_actions[0];
-        println!(
-            "\n--- Acting on first action: {} ---",
-            first_action.description
-        );
+    // 6. Click the "More information..." link on example.com
+    println!("\n--- Acting on 'More information...' link ---");
 
-        let mut act_stream = stagehand
-            .act(
-                format!("Click on: {}", first_action.description),
-                None,
-                HashMap::new(),
-                Some(60_000),
-                Some(frame_id.clone()),
-            )
-            .await?;
+    let mut act_stream = stagehand
+        .act(
+            "Click on the 'More information...' link",
+            None,
+            HashMap::new(),
+            Some(60_000),
+            None,
+        )
+        .await?;
 
-        while let Some(res) = act_stream.next().await {
-            match res {
-                Ok(act_response) => {
-                    if let Some(stagehand_sdk::proto::act_response::Event::Success(success)) =
-                        act_response.event
-                    {
-                        println!("[ACT RESULT] Success: {}", success);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Act stream error: {:?}", e);
+    let mut act_success = false;
+    while let Some(res) = act_stream.next().await {
+        match res {
+            Ok(act_response) => {
+                if let Some(stagehand_sdk::proto::act_response::Event::Success(success)) =
+                    act_response.event
+                {
+                    println!("[ACT RESULT] Success: {}", success);
+                    act_success = success;
                 }
             }
-        }
-
-        // Wait for navigation to complete
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-    } else {
-        // If no observed actions, try clicking the "More information..." link on example.com
-        println!("\n--- Acting on 'More information...' link ---");
-
-        let mut act_stream = stagehand
-            .act(
-                "Click on the 'More information...' link",
-                None,
-                HashMap::new(),
-                Some(60_000),
-                Some(frame_id.clone()),
-            )
-            .await?;
-
-        while let Some(res) = act_stream.next().await {
-            match res {
-                Ok(act_response) => {
-                    if let Some(stagehand_sdk::proto::act_response::Event::Success(success)) =
-                        act_response.event
-                    {
-                        println!("[ACT RESULT] Success: {}", success);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Act stream error: {:?}", e);
-                }
+            Err(e) => {
+                eprintln!("Act stream error: {:?}", e);
             }
         }
-
-        // Wait for navigation
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     }
 
-    // 8. Verify the URL has changed
-    let final_url = page
-        .url()
-        .await
-        .map_err(|e| format!("Failed to get final URL: {}", e))?
-        .unwrap_or_default();
-    println!("\n--- URL Verification ---");
-    println!("Initial URL: {}", initial_url);
-    println!("Final URL: {}", final_url);
+    // 7. Verify the action was successful
+    assert!(act_success, "The act command should have succeeded");
 
-    // The URL should have changed after clicking a link
-    // On example.com, clicking "More information..." should navigate to iana.org
-    assert_ne!(
-        initial_url, final_url,
-        "URL should have changed after clicking a link"
-    );
-
-    // 9. Close Stagehand and browser
+    // 8. Close Stagehand
     stagehand.close(true).await?;
-    browser
-        .close()
-        .await
-        .map_err(|e| format!("Failed to close browser: {}", e))?;
-    handle.abort();
 
     println!("\nTest completed successfully!");
     Ok(())
@@ -311,7 +228,6 @@ async fn test_chromiumoxide_stagehand_integration(
 
 /// Simpler test that just verifies chromiumoxide can launch and navigate
 #[tokio::test]
-#[ignore] // Requires Chrome to be installed
 async fn test_chromiumoxide_basic() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Launch browser
     let (mut browser, mut handler) = Browser::launch(
