@@ -107,16 +107,6 @@ pub struct AgentExecuteOptions {
     // Other fields from AgentExecuteOptions in TS can go here if needed
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ExecuteRequestPayload<'a> {
-    session_id: &'a str,
-    instruction: &'a str,
-    frame_id: Option<String>,
-    agent_config_json: Option<String>,
-    execute_options_json: Option<String>,
-}
-
 // --- Idiomatic Types ---
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -690,14 +680,15 @@ impl Stagehand {
     ) -> Result<Pin<Box<dyn Stream<Item = Result<proto::ExecuteResponse, tonic::Status>> + Send>>, tonic::Status> {
         match &mut self.client {
             StagehandClientType::Grpc(client) => {
-                // For gRPC, we need to map the agent concepts back to the raw ExecuteRequest
-                // This is a simplification, as gRPC ExecuteRequest is just session_id and code.
-                // We will just execute the instruction as code for now.
-                let code_to_execute = instruction; // Directly use instruction as code
+                let agent_config_json = agent_config.map(|c| serde_json::to_string(&c).unwrap_or_default());
+                let execute_options_json = execute_options.map(|o| serde_json::to_string(&o).unwrap_or_default());
 
                 let req = proto::ExecuteRequest {
                     session_id,
-                    code: code_to_execute,
+                    instruction,
+                    frame_id,
+                    agent_config_json,
+                    execute_options_json,
                 };
                 let response = client.execute(req).await?;
                 Ok(Box::pin(response.into_inner()))
@@ -706,17 +697,11 @@ impl Stagehand {
                 let mut rest_client = client.clone();
                 let path = format!("/sessions/{}/agentExecute", session_id);
 
-                let agent_config_json = agent_config.map(|c| serde_json::to_string(&c).unwrap_or_default());
-                let execute_options_json = execute_options.map(|o| serde_json::to_string(&o).unwrap_or_default());
-
-                let payload = ExecuteRequestPayload {
-                    session_id: &session_id,
-                    instruction: &instruction,
-                    frame_id,
-                    agent_config_json,
-                    execute_options_json,
-                };
-                let body = serde_json::to_value(payload).unwrap();
+                let body = serde_json::json!({
+                    "agentConfig": agent_config,
+                    "executeOptions": execute_options,
+                    "frameId": frame_id,
+                });
 
                 let sse_stream = rest_client.execute_stream::<proto::ExecuteResponse>(&path, body).await?;
                 Ok(Box::pin(stream! {

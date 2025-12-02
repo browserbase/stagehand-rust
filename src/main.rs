@@ -1,4 +1,4 @@
-use stagehand_sdk::{Stagehand, V3Options, Env, Model, Transport, AgentExecuteOptions};
+use stagehand_sdk::{Stagehand, V3Options, Env, Model, Transport, AgentConfig, AgentExecuteOptions};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -148,8 +148,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
 
-    // 7. Execute some JavaScript using the agent-like signature
-    println!("Executing JavaScript via agent-like execute...");
+    // 7. Execute with agent-like signature
+    println!("Executing with agent-like signature...");
     let agent_execute_options = AgentExecuteOptions {
         instruction: "Return the current page's URL.".to_string(),
         page: Some("main".to_string()),
@@ -164,14 +164,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Some(agent_execute_options),
     ).await?;
 
-    let mut js_result: Option<String> = None;
+    let mut agent_result: Option<String> = None;
     while let Some(msg) = execute_stream.next().await {
         if let Ok(event) = msg {
             match event.event {
                 Some(stagehand_sdk::proto::execute_response::Event::Progress(p)) => println!("[EXECUTE PROGRESS] {}", p),
-                Some(stagehand_sdk::proto::execute_response::Event::Result(r)) => {
+                Some(stagehand_sdk::proto::execute_response::Event::ResultJson(r)) => {
                     println!("[EXECUTE RESULT] {}", r);
-                    js_result = Some(r);
+                    agent_result = Some(r);
                 },
                 _ => {}
             }
@@ -180,8 +180,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             return Err(e.into());
         }
     }
-    assert!(js_result.is_some(), "Failed to execute JavaScript or get result.");
-    println!("JavaScript execution result: {:?}", js_result.unwrap());
+    assert!(agent_result.is_some(), "Failed to execute with agent-like signature or get result.");
+    println!("Agent execution result: {:?}", agent_result.unwrap());
 
     // 8. Close
     stagehand.close(true).await?;

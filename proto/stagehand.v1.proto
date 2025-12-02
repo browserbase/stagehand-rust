@@ -14,7 +14,7 @@ service StagehandService {
   // maps to stagehand.observe()
   rpc Observe (ObserveRequest) returns (stream ObserveResponse);
 
-  // Dispatches an Execute event
+  // Dispatches an Execute event (maps to agent.execute)
   rpc Execute (ExecuteRequest) returns (stream ExecuteResponse);
   
   // maps to stagehand.close()
@@ -147,13 +147,16 @@ message ObserveResponse {
 
 message ExecuteRequest {
   string session_id = 1;
-  string code = 2; // JS code to execute
+  string instruction = 2;
+  optional string frame_id = 3;
+  optional string agent_config_json = 4;
+  optional string execute_options_json = 5;
 }
 
 message ExecuteResponse {
   oneof event {
     string progress = 1;
-    string result = 2;
+    string result_json = 2; // JSON string of AgentResult
   }
 }
 
