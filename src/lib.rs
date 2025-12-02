@@ -67,9 +67,54 @@ struct ExtractOptionsPayload {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ObserveRequestPayload {
+    instruction: Option<String>,
+    frame_id: Option<String>,
+    options: ObserveOptionsPayload,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ObserveOptionsPayload {
+    model: Option<proto::ModelConfiguration>,
+    timeout_ms: Option<u32>,
+    selector: Option<String>,
+    only_selectors: Vec<String>,
+}
+
+// --- Agent specific structs (matching TypeScript types) ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentConfig {
+    pub cua: Option<bool>,
+    pub stream: Option<bool>,
+    pub model: Option<Model>,
+    pub system_prompt: Option<String>,
+    // Assuming Tool is a simple string identifier for now, can be expanded if needed
+    pub tools: Option<HashMap<String, serde_json::Value>>, 
+    // Assuming AgentIntegration is a simple string identifier for now
+    pub integrations: Option<Vec<String>>,
+    pub execution_model: Option<Model>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentExecuteOptions {
+    pub instruction: String,
+    pub page: Option<String>, // Represents frame_id in our context
+    pub timeout: Option<u32>,
+    // Other fields from AgentExecuteOptions in TS can go here if needed
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ExecuteRequestPayload<'a> {
     session_id: &'a str,
-    code: &'a str,
+    instruction: &'a str,
+    frame_id: Option<String>,
+    agent_config_json: Option<String>,
+    execute_options_json: Option<String>,
 }
 
 // --- Idiomatic Types ---
@@ -89,7 +134,7 @@ impl ToString for Env {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)] // Added Serialize, Deserialize
 pub enum Model {
     String(String),
     Config {
@@ -591,6 +636,7 @@ impl Stagehand {
         timeout_ms: Option<u32>,
         selector: Option<String>,
         only_selectors: Vec<String>,
+        frame_id: Option<String>,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<proto::ObserveResponse, tonic::Status>> + Send>>, tonic::Status> {
         match &mut self.client {
             StagehandClientType::Grpc(client) => {
@@ -609,15 +655,18 @@ impl Stagehand {
                 let mut rest_client = client.clone();
                 let session_id = rest_client.session_id.as_ref().ok_or_else(|| tonic::Status::internal("Session ID is missing for REST API Observe call"))?.clone();
                 let path = format!("/sessions/{}/observe", session_id);
-                let body = serde_json::json!({
-                    "instruction": instruction,
-                    "options": {
-                        "model": model.map(|m| -> proto::ModelConfiguration { m.into() }),
-                        "timeoutMs": timeout_ms.map(|t| t as i32),
-                        "selector": selector,
-                        "onlySelectors": only_selectors,
-                    }
-                });
+
+                let payload = ObserveRequestPayload {
+                    instruction,
+                    frame_id,
+                    options: ObserveOptionsPayload {
+                        model: model.map(|m| m.into()),
+                        timeout_ms,
+                        selector,
+                        only_selectors,
+                    },
+                };
+                let body = serde_json::to_value(payload).unwrap();
 
                 let sse_stream = rest_client.execute_stream::<proto::ObserveResponse>(&path, body).await?;
                 Ok(Box::pin(stream! {
@@ -630,23 +679,42 @@ impl Stagehand {
     }
 
     /// Stagehand.execute(...)
+    /// Maps to TypeScript's `stagehand.agent().execute(instruction, options)` (or `agentExecute` in `api.ts`)
     pub async fn execute(
         &mut self,
         session_id: String,
-        code: String,
+        instruction: String,
+        frame_id: Option<String>,
+        agent_config: Option<AgentConfig>,
+        execute_options: Option<AgentExecuteOptions>,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<proto::ExecuteResponse, tonic::Status>> + Send>>, tonic::Status> {
         match &mut self.client {
             StagehandClientType::Grpc(client) => {
-                let req = proto::ExecuteRequest { session_id, code };
+                // For gRPC, we need to map the agent concepts back to the raw ExecuteRequest
+                // This is a simplification, as gRPC ExecuteRequest is just session_id and code.
+                // We will just execute the instruction as code for now.
+                let code_to_execute = instruction; // Directly use instruction as code
+
+                let req = proto::ExecuteRequest {
+                    session_id,
+                    code: code_to_execute,
+                };
                 let response = client.execute(req).await?;
                 Ok(Box::pin(response.into_inner()))
             },
             StagehandClientType::Rest(client) => {
                 let mut rest_client = client.clone();
-                let path = format!("/sessions/{}/execute", session_id);
+                let path = format!("/sessions/{}/agentExecute", session_id);
+
+                let agent_config_json = agent_config.map(|c| serde_json::to_string(&c).unwrap_or_default());
+                let execute_options_json = execute_options.map(|o| serde_json::to_string(&o).unwrap_or_default());
+
                 let payload = ExecuteRequestPayload {
                     session_id: &session_id,
-                    code: &code,
+                    instruction: &instruction,
+                    frame_id,
+                    agent_config_json,
+                    execute_options_json,
                 };
                 let body = serde_json::to_value(payload).unwrap();
 

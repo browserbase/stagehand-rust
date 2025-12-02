@@ -1,4 +1,4 @@
-use stagehand_sdk::{Stagehand, V3Options, Env, Model, Transport};
+use stagehand_sdk::{Stagehand, V3Options, Env, Model, Transport, AgentExecuteOptions};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -12,8 +12,11 @@ struct MovieInfo {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Load environment variables from .env file
-    dotenvy::dotenv().ok();
+    // Set environment variables for API keys if using REST transport
+    // In a real application, these would come from your environment or a config file.
+    std::env::set_var("BROWSERBASE_API_KEY", "YOUR_BROWSERBASE_API_KEY");
+    std::env::set_var("BROWSERBASE_PROJECT_ID", "YOUR_BROWSERBASE_PROJECT_ID");
+    std::env::set_var("OPENAI_API_KEY", "YOUR_OPENAI_API_KEY");
 
     // 1. Create client, specifying REST transport
     let mut stagehand = Stagehand::connect(
@@ -113,12 +116,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
 
-    // 6. Execute some JavaScript
-    println!("Executing JavaScript...");
-    let js_code = "return document.title;".to_string();
+    // 6. Observe (Modified to include frame_id)
+    println!("Observing page...");
+    let observe_instruction = Some("Find interactive elements.".to_string());
+    let observe_timeout = Some(30_000);
+    let observe_selector = None;
+    let observe_only_selectors = vec![];
+    let observe_frame_id = Some("main".to_string());
+
+    let mut observe_stream = stagehand.observe(
+        observe_instruction,
+        None,
+        observe_timeout,
+        observe_selector,
+        observe_only_selectors,
+        observe_frame_id,
+    ).await?;
+
+    while let Some(msg) = observe_stream.next().await {
+        if let Ok(event) = msg {
+            match event.event {
+                Some(stagehand_sdk::proto::observe_response::Event::Log(l)) => println!("[OBSERVE LOG] {:?}", l),
+                Some(stagehand_sdk::proto::observe_response::Event::ElementsJson(json)) => {
+                    println!("[OBSERVE RESULT] Found elements: {}", json);
+                }
+                _ => {}
+            }
+        } else if let Err(e) = msg {
+            eprintln!("Observe stream error: {:?}", e);
+            return Err(e.into());
+        }
+    }
+
+    // 7. Execute some JavaScript using the agent-like signature
+    println!("Executing JavaScript via agent-like execute...");
+    let agent_execute_options = AgentExecuteOptions {
+        instruction: "Return the current page's URL.".to_string(),
+        page: Some("main".to_string()),
+        timeout: Some(10_000),
+    };
+
     let mut execute_stream = stagehand.execute(
         session_id.clone(),
-        js_code,
+        agent_execute_options.instruction.clone(),
+        agent_execute_options.page.clone(),
+        None, // No specific AgentConfig for this example
+        Some(agent_execute_options),
     ).await?;
 
     let mut js_result: Option<String> = None;
@@ -140,7 +183,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(js_result.is_some(), "Failed to execute JavaScript or get result.");
     println!("JavaScript execution result: {:?}", js_result.unwrap());
 
-    // 7. Close
+    // 8. Close
     stagehand.close(true).await?;
     
     Ok(())
