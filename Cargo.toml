@@ -1,6 +1,6 @@
 [package]
 name = "stagehand_sdk"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 description = "Rust SDK for Stagehand - AI-powered browser automation with Browserbase"
 license = "Apache-2.0"
