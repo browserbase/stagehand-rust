@@ -39,7 +39,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-stagehand-sdk = { git = "https://github.com/browserbase/stagehand-rust-sdk" }
+stagehand-sdk = { git = "https://github.com/browserbase/stagehand-rust" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
@@ -730,4 +730,4 @@ MIT
 
 - [Stagehand Documentation](https://docs.stagehand.dev)
 - [Browserbase](https://browserbase.com)
-- [GitHub Repository](https://github.com/browserbase/stagehand-rust-sdk)
+- [GitHub Repository](https://github.com/browserbase/stagehand-rust)
