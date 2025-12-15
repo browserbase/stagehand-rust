@@ -163,8 +163,8 @@ pub struct V3Options {
     pub browserbase_session_id: Option<String>,
     pub browserbase_session_create_params: Option<serde_json::Value>,
 
-    // Local browser options (for future use)
-    pub local_browser_launch_options: Option<LocalBrowserLaunchOptions>,
+    // Local browser options (coming soon)
+    // pub local_browser_launch_options: Option<LocalBrowserLaunchOptions>,
 
     // AI model configuration
     pub model: Option<Model>,
