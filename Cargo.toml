@@ -19,5 +19,5 @@ dotenvy = "0.15"
 async-trait = "0.1.89"
 
 [dev-dependencies]
-chromiumoxide = { version = "0.7", features = ["tokio-runtime"], default-features = false }
+chromiumoxide = { version = "0.8", features = ["tokio-runtime"] }
 tokio-test = "0.4"

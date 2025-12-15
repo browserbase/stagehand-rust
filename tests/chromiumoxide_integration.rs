@@ -10,17 +10,9 @@
 use chromiumoxide::browser::Browser;
 use chromiumoxide::cdp::browser_protocol::page::NavigateParams;
 use futures::StreamExt;
-use serde::{Deserialize, Serialize};
 use stagehand_sdk::{Env, Model, Stagehand, TransportChoice, V3Options};
 use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent};
 use std::collections::HashMap;
-
-/// Schema for extracting page info
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct PageInfo {
-    title: String,
-    url: String,
-}
 
 /// Test that creates a Browserbase session via Stagehand and connects chromiumoxide to it
 #[tokio::test]
