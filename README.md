@@ -47,6 +47,24 @@ serde_json = "1"
 dotenvy = "0.15"
 ```
 
+### Runtime Support
+
+The SDK supports both **tokio** and **async-std** runtimes. Tokio is enabled by default.
+
+**Using tokio (default):**
+```toml
+[dependencies]
+stagehand-sdk = { git = "https://github.com/browserbase/stagehand-rust" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+```
+
+**Using async-std:**
+```toml
+[dependencies]
+stagehand-sdk = { git = "https://github.com/browserbase/stagehand-rust", default-features = false, features = ["async-std-runtime"] }
+async-std = { version = "1", features = ["attributes"] }
+```
+
 ## Quick Start
 
 ```rust

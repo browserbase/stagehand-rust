@@ -9,7 +9,14 @@ use std::fmt;
 // --- Rest API specific imports ---
 use reqwest::Client;
 use eventsource_client::{Client as SseClient, ClientBuilder, SSE};
-use tokio_stream::wrappers::ReceiverStream;
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+// TODO: Change to "rust" once the stagehand-api backend supports it
+const SDK_LANGUAGE: &str = "typescript";
+const SDK_VERSION: &str = "3.0.0";
 
 // =============================================================================
 // Native Response Types
@@ -373,16 +380,16 @@ impl RestTransport {
             .header("x-bb-project-id", &self.project_id)?
             .header("x-model-api-key", &self.model_api_key)?
             .header("x-stream-response", "true")?
-            .header("x-language", "typescript")?
-            .header("x-sdk-version", "3.0.0")?
+            .header("x-language", SDK_LANGUAGE)?
+            .header("x-sdk-version", SDK_VERSION)?
             .header("Content-Type", "application/json")?
             .method(reqwest::Method::POST.to_string())
             .body(body.to_string());
 
         let sse_client = client_builder.build();
-        let (tx, rx) = tokio::sync::mpsc::channel(100);
+        let (tx, rx) = async_channel::bounded(100);
 
-        tokio::spawn(async move {
+        let sse_task = async move {
             let mut stream = sse_client.stream();
             while let Some(event) = stream.next().await {
                 match event {
@@ -417,9 +424,19 @@ impl RestTransport {
                     }
                 }
             }
-        });
+        };
 
-        Ok(Box::pin(ReceiverStream::new(rx)))
+        // Spawn the SSE reading task using the appropriate runtime
+        #[cfg(feature = "tokio-runtime")]
+        tokio::spawn(sse_task);
+
+        #[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
+        async_std::task::spawn(sse_task);
+
+        // Convert async-channel receiver to a Stream
+        Ok(Box::pin(futures::stream::unfold(rx, |rx| async move {
+            rx.recv().await.ok().map(|item| (item, rx))
+        })))
     }
 
     fn parse_log_event(json_value: &serde_json::Value) -> Option<LogLine> {
@@ -486,8 +503,8 @@ impl Transport for RestTransport {
             .header("x-bb-api-key", &self.api_key)
             .header("x-bb-project-id", &self.project_id)
             .header("x-model-api-key", &self.model_api_key)
-            .header("x-language", "typescript")
-            .header("x-sdk-version", "3.0.0")
+            .header("x-language", SDK_LANGUAGE)
+            .header("x-sdk-version", SDK_VERSION)
             .header("Content-Type", "application/json")
             .json(&body)
             .send()

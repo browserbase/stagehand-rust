@@ -3,21 +3,34 @@ name = "stagehand-sdk"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["tokio-runtime"]
+tokio-runtime = ["tokio", "tokio-stream"]
+async-std-runtime = ["async-std"]
+
 [dependencies]
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+# Runtime-agnostic
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 futures = "0.3"
+futures-util = "0.3.31"
+async-channel = "2"
 reqwest = { version = "0.12", features = ["json", "stream"] }
-tokio-stream = "0.1"
-async-stream = "0.3"
-tokio-util = { version = "0.7", features = ["codec", "io"] }
 bytes = "1"
 eventsource-client = "0.15.1"
-futures-util = "0.3.31"
 dotenvy = "0.15"
 async-trait = "0.1.89"
 
+# Tokio runtime (optional, default)
+tokio = { version = "1", features = ["sync", "rt", "macros", "rt-multi-thread"], optional = true }
+tokio-stream = { version = "0.1", optional = true }
+
+# Async-std runtime (optional)
+async-std = { version = "1", features = ["attributes"], optional = true }
+
 [dev-dependencies]
-chromiumoxide = { version = "0.8", features = ["tokio-runtime"] }
+chromiumoxide = { version = "0.8.0", features = ["async-std-runtime"] }
+# TLS support for WSS connections (only native-tls to avoid HTTP/2 ALPN issues)
+async-tungstenite = { version = "*", features = ["async-native-tls", "async-std-runtime"] }
+async-std = { version = "1", features = ["attributes"] }
 tokio-test = "0.4"
