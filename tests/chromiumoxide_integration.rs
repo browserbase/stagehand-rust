@@ -99,10 +99,10 @@ async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::
     assert!(current_url.contains("example.com"), "Should be on example.com");
 
     // Get page title using chromiumoxide
-    let nav_history = page.execute(
+    let _nav_history = page.execute(
         chromiumoxide::cdp::browser_protocol::page::GetNavigationHistoryParams::default()
     ).await?;
-    println!("   Page loaded successfully! Navigation history: {:?}", nav_history);
+    println!("   Page loaded successfully!");
 
     // 5. Now use Stagehand's AI-powered methods on the same browser session
     println!("5. Using Stagehand AI to extract data from the same session...");

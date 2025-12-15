@@ -366,7 +366,7 @@ impl RestTransport {
         let url = format!("{}{}", self.base_url, path);
 
         // Debug: print request details
-        eprintln!("[DEBUG] POST {} body={}", url, body);
+        // eprintln!("[DEBUG] POST {} body={}", url, body);
 
         let client_builder = ClientBuilder::for_url(&url)?
             .header("x-bb-api-key", &self.api_key)?
@@ -390,7 +390,7 @@ impl RestTransport {
                         match sse_event {
                             SSE::Event(e) => {
                                 // Debug: print raw SSE event
-                                eprintln!("[DEBUG] SSE event: type={} data={}", e.event_type, &e.data);
+                                // eprintln!("[DEBUG] SSE event: type={} data={}", e.event_type, &e.data);
                                 if let Ok(event_data) = serde_json::from_str::<serde_json::Value>(&e.data) {
                                     if tx.send(Ok(event_data)).await.is_err() {
                                         break;
@@ -399,16 +399,20 @@ impl RestTransport {
                                     let _ = tx.send(Err(StagehandError::Api(format!("Failed to parse SSE event: {}", e.data)))).await;
                                 }
                             },
-                            SSE::Comment(c) => {
-                                eprintln!("[DEBUG] SSE comment: {}", c);
+                            SSE::Comment(_c) => {
+                                // eprintln!("[DEBUG] SSE comment: {}", _c);
                             },
                             SSE::Connected(_) => {
-                                eprintln!("[DEBUG] SSE connected");
+                                // eprintln!("[DEBUG] SSE connected");
                             },
                         }
                     },
                     Err(e) => {
-                        let _ = tx.send(Err(StagehandError::Transport(e.to_string()))).await;
+                        // EOF is expected when the SSE stream closes normally
+                        let err_str = e.to_string();
+                        if !err_str.contains("eof") {
+                            let _ = tx.send(Err(StagehandError::Transport(err_str))).await;
+                        }
                         break;
                     }
                 }
