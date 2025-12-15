@@ -599,7 +599,7 @@ async fn test_browserbase_live_extract() -> Result<(), Box<dyn std::error::Error
 }
 ```
 
-### Local Browser with Chromiumoxide
+### ~~Local Browser with Chromiumoxide~~ (Coming Soon)
 
 See [`tests/chromiumoxide_integration.rs`](tests/chromiumoxide_integration.rs) for using a local browser:
 
