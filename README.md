@@ -1,6 +1,10 @@
-# Stagehand Rust SDK
+# Stagehand Rust SDK [ALPHA]
 
 A Rust client library for [Stagehand](https://stagehand.dev), the AI-powered browser automation framework. This SDK provides an async-first, type-safe interface for controlling browsers and performing AI-driven web interactions.
+
+> [!CAUTION]
+> This is an ALPHA release and may not be production-ready.  
+> Please provide feedback and let us know if you have feature requests / bug reports!
 
 ## Features
 
