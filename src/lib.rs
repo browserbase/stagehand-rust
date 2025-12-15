@@ -98,6 +98,19 @@ pub struct ExecuteResponse {
     pub event: Option<ExecuteResponseEvent>,
 }
 
+/// Events that can occur during navigate
+#[derive(Debug, Clone)]
+pub enum NavigateResponseEvent {
+    Log(LogLine),
+    Success(bool),
+}
+
+/// Response from navigate operation
+#[derive(Debug, Clone)]
+pub struct NavigateResponse {
+    pub event: Option<NavigateResponseEvent>,
+}
+
 // =============================================================================
 // Model Configuration Types (matches API exactly)
 // =============================================================================
@@ -298,6 +311,7 @@ impl From<eventsource_client::Error> for StagehandError {
 #[async_trait]
 pub trait Transport: Send + Sync {
     async fn init(&mut self, opts: V3Options) -> Result<Pin<Box<dyn Stream<Item = Result<InitResponse, StagehandError>> + Send>>, StagehandError>;
+    async fn navigate(&mut self, session_id: &str, url: String, timeout: Option<u32>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<NavigateResponse, StagehandError>> + Send>>, StagehandError>;
     async fn act(&mut self, session_id: &str, instruction: String, model: Option<Model>, variables: HashMap<String, String>, timeout: Option<u32>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<ActResponse, StagehandError>> + Send>>, StagehandError>;
     async fn extract(&mut self, session_id: &str, instruction: String, schema: serde_json::Value, model: Option<Model>, timeout: Option<u32>, selector: Option<String>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<ExtractResponse, StagehandError>> + Send>>, StagehandError>;
     async fn observe(&mut self, session_id: &str, instruction: Option<String>, model: Option<Model>, timeout: Option<u32>, selector: Option<String>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<ObserveResponse, StagehandError>> + Send>>, StagehandError>;
@@ -318,10 +332,26 @@ pub struct RestTransport {
 }
 
 impl RestTransport {
+    /// Supported model API key environment variables (checked in order)
+    const MODEL_API_KEY_ENV_VARS: &'static [&'static str] = &[
+        "MODEL_API_KEY",                // Generic override (highest priority)
+        "OPENAI_API_KEY",               // OpenAI
+        "ANTHROPIC_API_KEY",            // Anthropic (Claude)
+        "GOOGLE_GENERATIVE_AI_API_KEY", // Google Gemini
+        "AZURE_API_KEY",                // Azure OpenAI
+        "MISTRAL_API_KEY",              // Mistral
+        "GROQ_API_KEY",                 // Groq
+        "CEREBRAS_API_KEY",             // Cerebras
+        "DEEPSEEK_API_KEY",             // DeepSeek
+    ];
+
     pub fn new(base_url: String) -> Result<Self, StagehandError> {
-        let model_api_key = std::env::var("OPENAI_API_KEY")
-            .or_else(|_| std::env::var("ANTHROPIC_API_KEY"))
-            .map_err(|_| StagehandError::MissingApiKey("OPENAI_API_KEY or ANTHROPIC_API_KEY".to_string()))?;
+        let model_api_key = Self::MODEL_API_KEY_ENV_VARS
+            .iter()
+            .find_map(|var| std::env::var(var).ok())
+            .ok_or_else(|| StagehandError::MissingApiKey(
+                format!("One of: {}", Self::MODEL_API_KEY_ENV_VARS.join(", "))
+            ))?;
 
         Ok(Self {
             base_url,
@@ -472,6 +502,71 @@ impl Transport for RestTransport {
         };
 
         Ok(Box::pin(futures::stream::once(async move { Ok(result) })))
+    }
+
+    async fn navigate(&mut self, session_id: &str, url: String, timeout: Option<u32>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<NavigateResponse, StagehandError>> + Send>>, StagehandError> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct NavigatePayload {
+            url: String,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            options: Option<NavigateOptions>,
+            // V3 schema requires frameId, use empty string for active page
+            frame_id: String,
+        }
+
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct NavigateOptions {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            timeout: Option<u32>,
+        }
+
+        let options = timeout.map(|t| NavigateOptions { timeout: Some(t) });
+
+        let payload = NavigatePayload {
+            url,
+            options,
+            // Use provided frame_id or empty string (backend uses active page for empty/falsy)
+            frame_id: frame_id.unwrap_or_default(),
+        };
+
+        let body = serde_json::to_value(payload).map_err(|e| StagehandError::Api(e.to_string()))?;
+        let json_stream = self.execute_stream(session_id, &format!("/sessions/{}/navigate", session_id), body).await?;
+
+        Ok(Box::pin(json_stream.map(|item| {
+            item.and_then(|json_value| {
+                if let Some(event_type) = json_value["type"].as_str() {
+                    match event_type {
+                        "system" => {
+                            if let Some(status) = json_value["data"]["status"].as_str() {
+                                match status {
+                                    "finished" => {
+                                        Ok(NavigateResponse { event: Some(NavigateResponseEvent::Success(true)) })
+                                    },
+                                    "error" => {
+                                        Err(StagehandError::Api(json_value["data"]["error"].as_str().unwrap_or("Unknown error").to_string()))
+                                    },
+                                    _ => Ok(NavigateResponse { event: None })
+                                }
+                            } else {
+                                Ok(NavigateResponse { event: None })
+                            }
+                        },
+                        "log" => {
+                            if let Some(log) = RestTransport::parse_log_event(&json_value) {
+                                Ok(NavigateResponse { event: Some(NavigateResponseEvent::Log(log)) })
+                            } else {
+                                Ok(NavigateResponse { event: None })
+                            }
+                        },
+                        _ => Ok(NavigateResponse { event: None })
+                    }
+                } else {
+                    Ok(NavigateResponse { event: Some(NavigateResponseEvent::Success(true)) })
+                }
+            })
+        })))
     }
 
     async fn act(&mut self, session_id: &str, instruction: String, model: Option<Model>, variables: HashMap<String, String>, timeout: Option<u32>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<ActResponse, StagehandError>> + Send>>, StagehandError> {
@@ -827,6 +922,11 @@ impl Stagehand {
             }
         }
         Err(StagehandError::Api("Init stream ended without a session ID.".to_string()))
+    }
+
+    pub async fn navigate(&mut self, url: impl Into<String>, timeout: Option<u32>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<NavigateResponse, StagehandError>> + Send>>, StagehandError> {
+        let session_id = self.session_id.as_ref().ok_or_else(|| StagehandError::Api("Session not initialized".to_string()))?.clone();
+        self.transport.navigate(&session_id, url.into(), timeout, frame_id).await
     }
 
     pub async fn act(&mut self, instruction: impl Into<String>, model: Option<Model>, variables: HashMap<String, String>, timeout: Option<u32>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<ActResponse, StagehandError>> + Send>>, StagehandError> {

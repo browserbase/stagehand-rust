@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Environment variables required:
     // - BROWSERBASE_API_KEY
     // - BROWSERBASE_PROJECT_ID
-    // - OPENAI_API_KEY (or ANTHROPIC_API_KEY)
+    // - A model API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, etc.)
 
     // 1. Connect to Stagehand cloud API
     let mut stagehand = Stagehand::connect(
@@ -142,11 +142,19 @@ Create a `.env` file in your project root:
 BROWSERBASE_API_KEY=your_browserbase_api_key_here
 BROWSERBASE_PROJECT_ID=your_browserbase_project_id_here
 
-# Model API key (at least one required)
-OPENAI_API_KEY=your_openai_api_key_here
-# or
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
+# Model API key (at least one required, checked in this order)
+MODEL_API_KEY=your_api_key                          # Generic override (highest priority)
+OPENAI_API_KEY=your_openai_key                      # OpenAI
+ANTHROPIC_API_KEY=your_anthropic_key                # Anthropic (Claude)
+GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_key        # Google Gemini
+AZURE_API_KEY=your_azure_key                        # Azure OpenAI
+MISTRAL_API_KEY=your_mistral_key                    # Mistral
+GROQ_API_KEY=your_groq_key                          # Groq
+CEREBRAS_API_KEY=your_cerebras_key                  # Cerebras
+DEEPSEEK_API_KEY=your_deepseek_key                  # DeepSeek
 ```
+
+The SDK checks for model API keys in the order listed above and uses the first one found.
 
 ### V3Options
 

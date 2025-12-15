@@ -1,18 +1,17 @@
 use stagehand_sdk::{Stagehand, V3Options, Env, Model, TransportChoice, AgentConfig, AgentExecuteOptions, ModelConfiguration};
-use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent, ExecuteResponseEvent};
+use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent, ExecuteResponseEvent, NavigateResponseEvent, ObserveResponseEvent};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug)]
-struct MovieInfo {
+struct PageInfo {
     title: String,
-    rating: String,
-    release_year: String,
+    description: String,
 }
 
 #[tokio::test]
-async fn test_browserbase_live_extract() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_browserbase_live() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Load environment variables from .env
     dotenvy::dotenv().ok();
 
@@ -25,45 +24,67 @@ async fn test_browserbase_live_extract() -> Result<(), Box<dyn std::error::Error
     let opts = V3Options {
         env: Some(Env::Browserbase),
         verbose: Some(2),
-        model: Some(Model::String("openai/gpt-5-nano".into())),
+        model: Some(Model::String("openai/gpt-4o".into())),
         ..Default::default()
     };
 
     // 3. Init and capture session_id
     println!("Initializing...");
     stagehand.init(opts).await?;
+    println!("Session ID: {:?}", stagehand.session_id());
 
-    // 4. Act
-    let mut act_stream = stagehand.act(
-        "Go to imdb.com and search for 'The Matrix'",
-        Some(Model::String("openai/gpt-5-nano".into())),
-        HashMap::new(),
-        Some(30_000),
-        None,
-    ).await?;
+    // 4. Navigate to example.com
+    println!("\n=== NAVIGATE ===");
+    let mut nav_stream = stagehand.navigate("https://example.com", Some(30_000), None).await?;
 
-    while let Some(msg) = act_stream.next().await {
-         if let Ok(event) = msg {
+    while let Some(msg) = nav_stream.next().await {
+        if let Ok(event) = msg {
             match event.event {
-                Some(ActResponseEvent::Log(log_msg)) => println!("[ACT LOG] {:?}", log_msg),
-                Some(ActResponseEvent::Success(s)) => println!("[ACT RESULT] Success: {}", s),
+                Some(NavigateResponseEvent::Log(log_msg)) => println!("[NAV LOG] {:?}", log_msg),
+                Some(NavigateResponseEvent::Success(s)) => println!("[NAV RESULT] Success: {}", s),
                 _ => {}
             }
         } else if let Err(e) = msg {
-            eprintln!("Act stream error: {:?}", e);
+            eprintln!("Navigate stream error: {:?}", e);
         }
     }
 
-    // 5. Extract
-    let schema_template = MovieInfo {
-        title: "".into(), rating: "".into(), release_year: "".into()
+    // 5. Observe - find elements on the page
+    println!("\n=== OBSERVE ===");
+    let mut observe_stream = stagehand.observe(
+        Some("Find the main heading and any links on the page".to_string()),
+        Some(Model::String("gpt-4o".into())),
+        Some(30_000),
+        None,
+        None,
+    ).await?;
+
+    while let Some(msg) = observe_stream.next().await {
+        if let Ok(event) = msg {
+            match event.event {
+                Some(ObserveResponseEvent::Log(l)) => println!("[OBSERVE LOG] {:?}", l),
+                Some(ObserveResponseEvent::ElementsJson(json)) => {
+                    println!("[OBSERVE RESULT] Elements: {}", json);
+                }
+                _ => {}
+            }
+        } else if let Err(e) = msg {
+            eprintln!("Observe stream error: {:?}", e);
+        }
+    }
+
+    // 6. Extract - get page info
+    println!("\n=== EXTRACT ===");
+    let schema_template = PageInfo {
+        title: "".into(),
+        description: "".into(),
     };
 
     let mut extract_stream = stagehand.extract(
-        "Extract the top result movie info",
+        "Extract the page title and description text",
         &schema_template,
-        Some(Model::String("openai/gpt-5-nano".into())),
-        None,
+        Some(Model::String("gpt-4o".into())),
+        Some(30_000),
         None,
         None,
     ).await?;
@@ -74,10 +95,10 @@ async fn test_browserbase_live_extract() -> Result<(), Box<dyn std::error::Error
                 Some(ExtractResponseEvent::Log(l)) => println!("[EXTRACT LOG] {:?}", l),
                 Some(ExtractResponseEvent::DataJson(json)) => {
                     if json == "null" || json.is_empty() {
-                        println!("[EXTRACT RESULT] No data extracted (null)");
+                        println!("[EXTRACT RESULT] No data extracted");
                     } else {
-                        match serde_json::from_str::<MovieInfo>(&json) {
-                            Ok(movie) => println!("[EXTRACT RESULT] Extracted Data: {:?}", movie),
+                        match serde_json::from_str::<PageInfo>(&json) {
+                            Ok(info) => println!("[EXTRACT RESULT] Page Info: {:?}", info),
                             Err(e) => println!("[EXTRACT RESULT] Parse error: {} - Raw: {}", e, json),
                         }
                     }
@@ -89,18 +110,40 @@ async fn test_browserbase_live_extract() -> Result<(), Box<dyn std::error::Error
         }
     }
 
-    // 6. Execute with agent
-    println!("Executing with agent...");
+    // 7. Act - click on the "More information" link
+    println!("\n=== ACT ===");
+    let mut act_stream = stagehand.act(
+        "Click on the 'More information...' link",
+        Some(Model::String("gpt-4o".into())),
+        HashMap::new(),
+        Some(30_000),
+        None,
+    ).await?;
+
+    while let Some(msg) = act_stream.next().await {
+        if let Ok(event) = msg {
+            match event.event {
+                Some(ActResponseEvent::Log(log_msg)) => println!("[ACT LOG] {:?}", log_msg),
+                Some(ActResponseEvent::Success(s)) => println!("[ACT RESULT] Success: {}", s),
+                _ => {}
+            }
+        } else if let Err(e) = msg {
+            eprintln!("Act stream error: {:?}", e);
+        }
+    }
+
+    // 8. Execute with agent - verify where we are
+    println!("\n=== EXECUTE ===");
     let agent_config = AgentConfig {
         provider: None,
-        model: Some(ModelConfiguration::String("openai/gpt-5-nano".into())),
+        model: Some(ModelConfiguration::String("openai/gpt-4o".into())),
         system_prompt: None,
         cua: None,
     };
 
     let execute_options = AgentExecuteOptions {
-        instruction: "What is the URL of the current page?".to_string(),
-        max_steps: Some(10),
+        instruction: "What is the current page URL and title?".to_string(),
+        max_steps: Some(5),
         highlight_cursor: None,
     };
 
@@ -124,8 +167,10 @@ async fn test_browserbase_live_extract() -> Result<(), Box<dyn std::error::Error
         }
     }
 
-    // 7. Close
+    // 9. Close
+    println!("\n=== CLOSE ===");
     stagehand.close().await?;
+    println!("Session closed successfully");
 
     Ok(())
 }
