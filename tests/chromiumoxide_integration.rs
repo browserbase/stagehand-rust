@@ -13,7 +13,6 @@ use futures::StreamExt;
 use stagehand_sdk::{Env, Model, Stagehand, TransportChoice, V3Options};
 use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent};
 use std::collections::HashMap;
-use async_std::task as async_std_task;
 
 /// Test that creates a Browserbase session via Stagehand and connects chromiumoxide to it
 #[tokio::test]
@@ -43,40 +42,22 @@ async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::
     let session_id = stagehand.session_id().expect("Session ID should be set after start");
     println!("   Session ID: {}", session_id);
 
-    // 2. Get the CDP WebSocket URL for connecting chromiumoxide
-    let cdp_url = stagehand.browserbase_cdp_url()
-        .expect("CDP URL should be available after start");
-    println!("2. CDP WebSocket URL: {}", cdp_url);
+    // 2. Get the CDP WebSocket URL (fetches connectUrl from Browserbase API)
+    let cdp_url = stagehand.browserbase_cdp_url().await?;
+    println!("2. CDP URL: {}", cdp_url);
 
-    // Give the session more time to be fully ready
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    // Give the session a moment to be fully ready
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     // 3. Connect chromiumoxide to the remote Browserbase browser
     println!("3. Connecting chromiumoxide to remote browser...");
-    println!("   URL being used: {}", cdp_url);
 
-    // First test raw connection to verify it works
-    {
-        use async_tungstenite::async_std::connect_async_with_config;
-        use async_tungstenite::tungstenite::protocol::WebSocketConfig;
-        let config = WebSocketConfig::default()
-            .max_message_size(None)
-            .max_frame_size(None);
-        println!("   Testing raw connection first...");
-        match connect_async_with_config(&cdp_url, Some(config)).await {
-            Ok((_, response)) => println!("   Raw connection OK! Status: {:?}", response.status()),
-            Err(e) => println!("   Raw connection failed: {:?}", e),
-        }
-    }
-
-    // Now try chromiumoxide
-    println!("   Now trying chromiumoxide Browser::connect...");
     let (browser, mut handler) = Browser::connect(&cdp_url)
         .await
         .map_err(|e| format!("Failed to connect to browser: {}", e))?;
 
-    // Spawn handler for browser events using async-std
-    let handler_task = async_std_task::spawn(async move {
+    // Spawn handler for browser events
+    let handler_task = tokio::spawn(async move {
         while let Some(event) = handler.next().await {
             if event.is_err() {
                 break;
@@ -194,7 +175,7 @@ async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::
 
     // 9. Clean up
     println!("9. Cleaning up...");
-    drop(handler_task); // Cancel the async-std task by dropping it
+    handler_task.abort();
     stagehand.end().await?;
 
     println!("\n=== Test completed successfully! ===");
@@ -207,14 +188,14 @@ async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::
     Ok(())
 }
 
-/// Test raw async-tungstenite connection to Browserbase
+/// Test raw async-tungstenite connection to a Stagehand-created session
 #[tokio::test]
 async fn test_raw_websocket_connection() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     dotenvy::dotenv().ok();
 
-    println!("=== Raw WebSocket Connection Test ===\n");
+    println!("=== Raw WebSocket Connection Test (Stagehand Session) ===\n");
 
-    // Create a session via Stagehand
+    // Create a session via Stagehand API
     let api_base = std::env::var("STAGEHAND_API_URL")
         .unwrap_or_else(|_| "https://api.stagehand.browserbase.com/v1".to_string());
 
@@ -229,32 +210,31 @@ async fn test_raw_websocket_connection() -> Result<(), Box<dyn std::error::Error
 
     stagehand.start(init_opts).await?;
     let session_id = stagehand.session_id().expect("Session ID should be set");
-    let api_key = std::env::var("BROWSERBASE_API_KEY")?;
-
     println!("Session ID: {}", session_id);
 
+    // Get the proper connectUrl via browserbase_cdp_url()
+    let cdp_url = stagehand.browserbase_cdp_url().await?;
+    println!("CDP URL: {}", cdp_url);
+
     // Wait for session to be ready
-    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-    // Try raw async-tungstenite connection with same config as chromiumoxide
-    let url = format!("wss://connect.browserbase.com/?sessionId={}&apiKey={}", session_id, api_key);
-    println!("Connecting to: {}", url);
-
-    use async_tungstenite::async_std::connect_async_with_config;
+    // Try raw async-tungstenite connection
+    use async_tungstenite::tokio::connect_async_with_config;
     use async_tungstenite::tungstenite::protocol::WebSocketConfig;
 
-    // Use same config as chromiumoxide
     let config = WebSocketConfig::default()
         .max_message_size(None)
         .max_frame_size(None);
 
-    match connect_async_with_config(&url, Some(config)).await {
+    println!("Testing async-tungstenite connection...");
+    match connect_async_with_config(&cdp_url, Some(config)).await {
         Ok((ws_stream, response)) => {
-            println!("Connected with config! Response status: {:?}", response.status());
+            println!("SUCCESS! Response status: {:?}", response.status());
             drop(ws_stream);
         }
         Err(e) => {
-            println!("Connection failed: {:?}", e);
+            println!("FAILED: {:?}", e);
         }
     }
 

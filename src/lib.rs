@@ -1005,15 +1005,41 @@ impl Stagehand {
 
     /// Returns the Browserbase CDP WebSocket URL for connecting external tools like chromiumoxide.
     ///
-    /// The URL format is: `wss://connect.browserbase.com?sessionId={sessionId}&apiKey={apiKey}`
+    /// This fetches the session from the Browserbase API to get the proper `connectUrl`
+    /// with signing key, which is required for CDP connections.
     ///
-    /// This allows you to connect directly to the browser session using CDP.
-    pub fn browserbase_cdp_url(&self) -> Option<String> {
-        let session_id = self.session_id.as_ref()?;
-        let api_key = std::env::var("BROWSERBASE_API_KEY").ok()?;
-        Some(format!(
-            "wss://connect.browserbase.com?sessionId={}&apiKey={}",
-            session_id, api_key
-        ))
+    /// # Example
+    /// ```ignore
+    /// let cdp_url = stagehand.browserbase_cdp_url().await?;
+    /// let (browser, handler) = Browser::connect(&cdp_url).await?;
+    /// ```
+    pub async fn browserbase_cdp_url(&self) -> Result<String, StagehandError> {
+        let session_id = self.session_id.as_ref()
+            .ok_or_else(|| StagehandError::Api("Session not initialized".to_string()))?;
+        let api_key = std::env::var("BROWSERBASE_API_KEY")
+            .map_err(|_| StagehandError::MissingApiKey("BROWSERBASE_API_KEY".to_string()))?;
+
+        let client = reqwest::Client::new();
+        let response = client
+            .get(format!("https://api.browserbase.com/v1/sessions/{}", session_id))
+            .header("x-bb-api-key", &api_key)
+            .send()
+            .await
+            .map_err(|e| StagehandError::Api(format!("Failed to fetch session: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(StagehandError::Api(format!(
+                "Failed to fetch session: HTTP {}",
+                response.status()
+            )));
+        }
+
+        let session_data: serde_json::Value = response.json().await
+            .map_err(|e| StagehandError::Api(format!("Failed to parse session response: {}", e)))?;
+
+        session_data["connectUrl"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| StagehandError::Api("Session response missing connectUrl".to_string()))
     }
 }

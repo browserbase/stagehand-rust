@@ -29,8 +29,7 @@ tokio-stream = { version = "0.1", optional = true }
 async-std = { version = "1", features = ["attributes"], optional = true }
 
 [dev-dependencies]
-chromiumoxide = { version = "0.8.0", features = ["async-std-runtime"] }
-# TLS support for WSS connections (only native-tls to avoid HTTP/2 ALPN issues)
-async-tungstenite = { version = "*", features = ["async-native-tls", "async-std-runtime"] }
-async-std = { version = "1", features = ["attributes"] }
+chromiumoxide = { version = "0.8.0", features = ["tokio-runtime"] }
+# TLS support for WSS connections
+async-tungstenite = { version = "*", features = ["tokio-native-tls", "tokio-runtime"] }
 tokio-test = "0.4"
