@@ -8,7 +8,7 @@ A Rust client library for [Stagehand](https://stagehand.dev), the AI-powered bro
 
 ## Features
 
-- **Dual Transport Support**: Connect via gRPC (local/self-hosted) or REST API with Server-Sent Events (Browserbase cloud)
+- **Backend Support**: Currently only supports driving Browserbase cloud sessions
 - **AI-Driven Actions**: Use natural language instructions to interact with web pages
 - **Structured Data Extraction**: Extract typed data from pages using Serde schemas
 - **Element Observation**: Identify and analyze interactive elements on pages
@@ -189,9 +189,9 @@ let model = Model::Config {
 };
 ```
 
-### Local Browser Options
+### ~~Local Browser Options~~ (Coming Soon)
 
-For local browser automation (gRPC transport):
+For local browser automation:
 
 ```rust
 pub struct LocalBrowserLaunchOptions {
@@ -221,7 +221,7 @@ pub async fn connect(
 
 **Parameters:**
 - `dst` - The destination URL (used for reference)
-- `transport_type` - Either `Transport::Grpc(url)` or `Transport::Rest(base_url)`
+- `transport_type` - only `Transport::Rest(base_url)` for now
 
 **Example:**
 ```rust
@@ -229,12 +229,6 @@ pub async fn connect(
 let stagehand = Stagehand::connect(
     "https://api.stagehand.browserbase.com/v1".to_string(),
     Transport::Rest("https://api.stagehand.browserbase.com/v1".to_string()),
-).await?;
-
-// gRPC (local/self-hosted)
-let stagehand = Stagehand::connect(
-    "http://127.0.0.1:50051".to_string(),
-    Transport::Grpc("http://127.0.0.1:50051".to_string()),
 ).await?;
 ```
 
@@ -531,16 +525,6 @@ let stagehand = Stagehand::connect(
 - `BROWSERBASE_PROJECT_ID`
 - `OPENAI_API_KEY` (for OpenAI models)
 
-### gRPC (Local/Self-Hosted)
-
-The gRPC transport connects to a local or self-hosted Stagehand server.
-
-```rust
-let stagehand = Stagehand::connect(
-    "http://127.0.0.1:50051".to_string(),
-    Transport::Grpc("http://127.0.0.1:50051".to_string()),
-).await?;
-```
 
 ## Examples
 
@@ -638,7 +622,7 @@ async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Connect Stagehand to the running browser
     let mut stagehand = Stagehand::connect(
         "http://127.0.0.1:50051".to_string(),
-        Transport::Grpc("http://127.0.0.1:50051".to_string()),
+        Transport::Rest("https://api.stagehand.browserbase.com/v1".to_string()),
     ).await?;
 
     let opts = V3Options {
@@ -681,7 +665,7 @@ All errors implement `std::error::Error` and can be converted to `tonic::Status`
 
 ## Proto Specification
 
-The SDK is built on the following gRPC service definition ([`proto/stagehand.v1.proto`](proto/stagehand.v1.proto)):
+The SDK is built on the following service definition:
 
 ```protobuf
 service StagehandService {
