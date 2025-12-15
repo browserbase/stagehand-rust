@@ -1730,8 +1730,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
-name = "stagehand-sdk"
-version = "0.1.0"
+name = "stagehand"
+version = "0.3.0"
 dependencies = [
  "async-channel 2.5.0",
  "async-std",

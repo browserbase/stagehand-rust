@@ -68,8 +68,8 @@ async-std = { version = "1", features = ["attributes"] }
 ## Quick Start
 
 ```rust
-use stagehand_sdk::{Stagehand, V3Options, Env, Model, TransportChoice};
-use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent};
+use stagehand::{Stagehand, V3Options, Env, Model, TransportChoice};
+use stagehand::{ActResponseEvent, ExtractResponseEvent};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -473,7 +473,7 @@ pub async fn execute(
 **Example:**
 
 ```rust
-use stagehand_sdk::{AgentConfig, AgentExecuteOptions, ModelConfiguration};
+use stagehand::{AgentConfig, AgentExecuteOptions, ModelConfiguration};
 
 let agent_config = AgentConfig {
     provider: None,
@@ -556,7 +556,7 @@ See [`tests/chromiumoxide_integration.rs`](tests/chromiumoxide_integration.rs) f
 
 ```rust
 use chromiumoxide::browser::Browser;
-use stagehand_sdk::{Stagehand, V3Options, Env, Model, TransportChoice};
+use stagehand::{Stagehand, V3Options, Env, Model, TransportChoice};
 
 async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // 1. Create Stagehand session

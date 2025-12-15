@@ -1,5 +1,5 @@
-use stagehand_sdk::{Stagehand, V3Options, Env, Model, TransportChoice, AgentConfig, AgentExecuteOptions, ModelConfiguration};
-use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent, ExecuteResponseEvent};
+use stagehand::{Stagehand, V3Options, Env, Model, TransportChoice, AgentConfig, AgentExecuteOptions, ModelConfiguration};
+use stagehand::{ActResponseEvent, ExtractResponseEvent, ExecuteResponseEvent};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
