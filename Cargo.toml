@@ -2,6 +2,12 @@
 name = "stagehand-sdk"
 version = "0.1.0"
 edition = "2021"
+description = "Rust SDK for Stagehand - AI-powered browser automation with Browserbase"
+license = "Apache-2.0"
+repository = "https://github.com/browserbase/stagehand-rust"
+keywords = ["browser", "automation", "ai", "browserbase", "stagehand"]
+categories = ["web-programming", "api-bindings"]
+readme = "README.md"
 
 [features]
 default = ["tokio-runtime"]
