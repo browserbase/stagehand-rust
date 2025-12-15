@@ -23,12 +23,12 @@ A Rust client library for [Stagehand](https://stagehand.dev), the AI-powered bro
 - [Configuration](#configuration)
 - [API Reference](#api-reference)
   - [Stagehand::connect](#stagehandconnect)
-  - [init](#init)
+  - [start](#start)
   - [act](#act)
   - [extract](#extract)
   - [observe](#observe)
   - [execute](#execute)
-  - [close](#close)
+  - [end](#end)
   - [browserbase_cdp_url](#browserbase_cdp_url)
 - [Examples](#examples)
 - [Error Handling](#error-handling)
@@ -77,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         TransportChoice::Rest("https://api.stagehand.browserbase.com/v1".to_string())
     ).await?;
 
-    // 2. Initialize session
+    // 2. Start session
     let opts = V3Options {
         env: Some(Env::Browserbase),
         model: Some(Model::String("openai/gpt-5-nano".into())),
@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         ..Default::default()
     };
 
-    stagehand.init(opts).await?;
+    stagehand.start(opts).await?;
     println!("Session ID: {:?}", stagehand.session_id());
 
     // 3. Navigate to a page
@@ -106,10 +106,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     // 4. Extract structured data
-    let schema = Quote { text: String::new(), author: String::new() };
+    let schema = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "text": { "type": "string" },
+            "author": { "type": "string" }
+        }
+    });
     let mut extract_stream = stagehand.extract(
         "Extract the first quote on the page",
-        &schema,
+        schema,
         None,
         Some(60_000),
         None,
@@ -119,14 +125,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     while let Some(res) = extract_stream.next().await {
         if let Ok(response) = res {
             if let Some(ExtractResponseEvent::DataJson(json)) = response.event {
-                let quote: Quote = serde_json::from_str(&json)?;
-                println!("Quote: {} - {}", quote.text, quote.author);
+                println!("Quote: {}", json);
             }
         }
     }
 
-    // 5. Clean up
-    stagehand.close().await?;
+    // 5. End session
+    stagehand.end().await?;
     Ok(())
 }
 ```
@@ -232,12 +237,12 @@ let stagehand = Stagehand::connect(
 
 ---
 
-### `init`
+### `start`
 
-Initializes a browser session.
+Starts a browser session.
 
 ```rust
-pub async fn init(&mut self, opts: V3Options) -> Result<(), StagehandError>
+pub async fn start(&mut self, opts: V3Options) -> Result<(), StagehandError>
 ```
 
 **Example:**
@@ -250,7 +255,7 @@ let opts = V3Options {
     ..Default::default()
 };
 
-stagehand.init(opts).await?;
+stagehand.start(opts).await?;
 println!("Session: {}", stagehand.session_id().unwrap());
 ```
 
@@ -482,18 +487,18 @@ while let Some(res) = stream.next().await {
 
 ---
 
-### `close`
+### `end`
 
-Closes the browser session.
+Ends the browser session.
 
 ```rust
-pub async fn close(&mut self) -> Result<(), StagehandError>
+pub async fn end(&mut self) -> Result<(), StagehandError>
 ```
 
 **Example:**
 
 ```rust
-stagehand.close().await?;
+stagehand.end().await?;
 ```
 
 ---
@@ -541,7 +546,7 @@ async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         TransportChoice::Rest("https://api.stagehand.browserbase.com/v1".to_string())
     ).await?;
 
-    stagehand.init(V3Options {
+    stagehand.start(V3Options {
         env: Some(Env::Browserbase),
         model: Some(Model::String("openai/gpt-5-nano".into())),
         ..Default::default()
@@ -566,7 +571,7 @@ async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut stream = stagehand.act("Click the login button", None, Default::default(), None, None).await?;
     // ...
 
-    stagehand.close().await?;
+    stagehand.end().await?;
     Ok(())
 }
 ```

@@ -45,14 +45,14 @@ async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::
         ..Default::default()
     };
 
-    stagehand.init(init_opts).await?;
+    stagehand.start(init_opts).await?;
 
-    let session_id = stagehand.session_id().expect("Session ID should be set after init");
+    let session_id = stagehand.session_id().expect("Session ID should be set after start");
     println!("   Session ID: {}", session_id);
 
     // 2. Get the CDP WebSocket URL for connecting chromiumoxide
     let cdp_url = stagehand.browserbase_cdp_url()
-        .expect("CDP URL should be available after init");
+        .expect("CDP URL should be available after start");
     println!("2. CDP WebSocket URL: {}", cdp_url);
 
     // 3. Connect chromiumoxide to the remote Browserbase browser
@@ -99,23 +99,27 @@ async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::
     assert!(current_url.contains("example.com"), "Should be on example.com");
 
     // Get page title using chromiumoxide
-    let title = page.execute(
+    let nav_history = page.execute(
         chromiumoxide::cdp::browser_protocol::page::GetNavigationHistoryParams::default()
-    ).await;
-    println!("   Page loaded successfully!");
+    ).await?;
+    println!("   Page loaded successfully! Navigation history: {:?}", nav_history);
 
     // 5. Now use Stagehand's AI-powered methods on the same browser session
     println!("5. Using Stagehand AI to extract data from the same session...");
 
-    let schema = PageInfo {
-        title: String::new(),
-        url: String::new(),
-    };
+    // Schema must be in JSON Schema format
+    let schema = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "title": { "type": "string" },
+            "url": { "type": "string" }
+        }
+    });
 
     let mut extract_stream = stagehand
         .extract(
             "Extract the page title and current URL",
-            &schema,
+            schema,
             None,
             Some(30_000),
             None,
@@ -178,7 +182,7 @@ async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::
     // 9. Clean up
     println!("9. Cleaning up...");
     handler_task.abort();
-    stagehand.close().await?;
+    stagehand.end().await?;
 
     println!("\n=== Test completed successfully! ===");
     println!("Demonstrated:");

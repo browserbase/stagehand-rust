@@ -24,13 +24,13 @@ async fn test_browserbase_live() -> Result<(), Box<dyn std::error::Error + Send 
     let opts = V3Options {
         env: Some(Env::Browserbase),
         verbose: Some(2),
-        model: Some(Model::String("openai/gpt-4o".into())),
+        model: Some(Model::String("openai/gpt-5-nano".into())),
         ..Default::default()
     };
 
-    // 3. Init and capture session_id
-    println!("Initializing...");
-    stagehand.init(opts).await?;
+    // 3. Start session
+    println!("Starting session...");
+    stagehand.start(opts).await?;
     println!("Session ID: {:?}", stagehand.session_id());
 
     // 4. Navigate to example.com
@@ -53,7 +53,7 @@ async fn test_browserbase_live() -> Result<(), Box<dyn std::error::Error + Send 
     println!("\n=== OBSERVE ===");
     let mut observe_stream = stagehand.observe(
         Some("Find the main heading and any links on the page".to_string()),
-        Some(Model::String("gpt-4o".into())),
+        Some(Model::String("openai/gpt-5-nano".into())),
         Some(30_000),
         None,
         None,
@@ -75,15 +75,19 @@ async fn test_browserbase_live() -> Result<(), Box<dyn std::error::Error + Send 
 
     // 6. Extract - get page info
     println!("\n=== EXTRACT ===");
-    let schema_template = PageInfo {
-        title: "".into(),
-        description: "".into(),
-    };
+    // Schema must be in JSON Schema format, not a template object
+    let schema = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "title": { "type": "string" },
+            "description": { "type": "string" }
+        }
+    });
 
     let mut extract_stream = stagehand.extract(
         "Extract the page title and description text",
-        &schema_template,
-        Some(Model::String("gpt-4o".into())),
+        schema,
+        Some(Model::String("openai/gpt-5-nano".into())),
         Some(30_000),
         None,
         None,
@@ -114,7 +118,7 @@ async fn test_browserbase_live() -> Result<(), Box<dyn std::error::Error + Send 
     println!("\n=== ACT ===");
     let mut act_stream = stagehand.act(
         "Click on the 'More information...' link",
-        Some(Model::String("gpt-4o".into())),
+        Some(Model::String("openai/gpt-5-nano".into())),
         HashMap::new(),
         Some(30_000),
         None,
@@ -136,7 +140,7 @@ async fn test_browserbase_live() -> Result<(), Box<dyn std::error::Error + Send 
     println!("\n=== EXECUTE ===");
     let agent_config = AgentConfig {
         provider: None,
-        model: Some(ModelConfiguration::String("openai/gpt-4o".into())),
+        model: Some(ModelConfiguration::String("openai/gpt-5-nano".into())),
         system_prompt: None,
         cua: None,
     };
@@ -169,7 +173,7 @@ async fn test_browserbase_live() -> Result<(), Box<dyn std::error::Error + Send 
 
     // 9. Close
     println!("\n=== CLOSE ===");
-    stagehand.close().await?;
+    stagehand.end().await?;
     println!("Session closed successfully");
 
     Ok(())

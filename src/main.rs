@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // 3. Init and capture session_id
     println!("Initializing...");
-    stagehand.init(opts).await?;
+    stagehand.start(opts).await?;
     println!("Initialization Complete.");
 
     // 4. Act
@@ -56,13 +56,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     // 5. Extract
-    let schema_template = MovieInfo {
-        title: "".into(), rating: "".into(), release_year: "".into()
-    };
+    let schema = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "title": { "type": "string" },
+            "rating": { "type": "string" },
+            "release_year": { "type": "string" }
+        }
+    });
 
     let mut extract_stream = stagehand.extract(
         "Extract the top result movie info",
-        &schema_template,
+        schema,
         Some(Model::String("openai/gpt-5-nano".into())),
         None,
         None,
@@ -120,7 +125,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     // 7. Close
-    stagehand.close().await?;
+    stagehand.end().await?;
 
     Ok(())
 }

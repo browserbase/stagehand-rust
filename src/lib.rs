@@ -25,25 +25,25 @@ pub struct LogLine {
     pub status: Option<String>,
 }
 
-/// Result from init operation
+/// Result from start operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InitResult {
+pub struct StartResult {
     #[serde(default)]
     pub session_id: String,
 }
 
-/// Events that can occur during init
+/// Events that can occur during start
 #[derive(Debug, Clone)]
-pub enum InitResponseEvent {
+pub enum StartResponseEvent {
     Log(LogLine),
-    Result(InitResult),
+    Result(StartResult),
 }
 
-/// Response from init operation
+/// Response from start operation
 #[derive(Debug, Clone)]
-pub struct InitResponse {
-    pub event: Option<InitResponseEvent>,
+pub struct StartResponse {
+    pub event: Option<StartResponseEvent>,
 }
 
 /// Events that can occur during act
@@ -310,13 +310,13 @@ impl From<eventsource_client::Error> for StagehandError {
 /// Transport trait for Stagehand API communication
 #[async_trait]
 pub trait Transport: Send + Sync {
-    async fn init(&mut self, opts: V3Options) -> Result<Pin<Box<dyn Stream<Item = Result<InitResponse, StagehandError>> + Send>>, StagehandError>;
+    async fn start(&mut self, opts: V3Options) -> Result<Pin<Box<dyn Stream<Item = Result<StartResponse, StagehandError>> + Send>>, StagehandError>;
     async fn navigate(&mut self, session_id: &str, url: String, timeout: Option<u32>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<NavigateResponse, StagehandError>> + Send>>, StagehandError>;
     async fn act(&mut self, session_id: &str, instruction: String, model: Option<Model>, variables: HashMap<String, String>, timeout: Option<u32>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<ActResponse, StagehandError>> + Send>>, StagehandError>;
     async fn extract(&mut self, session_id: &str, instruction: String, schema: serde_json::Value, model: Option<Model>, timeout: Option<u32>, selector: Option<String>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<ExtractResponse, StagehandError>> + Send>>, StagehandError>;
     async fn observe(&mut self, session_id: &str, instruction: Option<String>, model: Option<Model>, timeout: Option<u32>, selector: Option<String>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<ObserveResponse, StagehandError>> + Send>>, StagehandError>;
     async fn execute(&mut self, session_id: &str, agent_config: AgentConfig, execute_options: AgentExecuteOptions, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<ExecuteResponse, StagehandError>> + Send>>, StagehandError>;
-    async fn close(&mut self, session_id: &str) -> Result<(), StagehandError>;
+    async fn end(&mut self, session_id: &str) -> Result<(), StagehandError>;
 }
 
 // =============================================================================
@@ -365,6 +365,9 @@ impl RestTransport {
     async fn execute_stream(&self, _session_id: &str, path: &str, body: serde_json::Value) -> Result<Pin<Box<dyn Stream<Item = Result<serde_json::Value, StagehandError>> + Send>>, StagehandError> {
         let url = format!("{}{}", self.base_url, path);
 
+        // Debug: print request details
+        eprintln!("[DEBUG] POST {} body={}", url, body);
+
         let client_builder = ClientBuilder::for_url(&url)?
             .header("x-bb-api-key", &self.api_key)?
             .header("x-bb-project-id", &self.project_id)?
@@ -386,6 +389,8 @@ impl RestTransport {
                     Ok(sse_event) => {
                         match sse_event {
                             SSE::Event(e) => {
+                                // Debug: print raw SSE event
+                                eprintln!("[DEBUG] SSE event: type={} data={}", e.event_type, &e.data);
                                 if let Ok(event_data) = serde_json::from_str::<serde_json::Value>(&e.data) {
                                     if tx.send(Ok(event_data)).await.is_err() {
                                         break;
@@ -394,7 +399,12 @@ impl RestTransport {
                                     let _ = tx.send(Err(StagehandError::Api(format!("Failed to parse SSE event: {}", e.data)))).await;
                                 }
                             },
-                            _ => {},
+                            SSE::Comment(c) => {
+                                eprintln!("[DEBUG] SSE comment: {}", c);
+                            },
+                            SSE::Connected(_) => {
+                                eprintln!("[DEBUG] SSE connected");
+                            },
                         }
                     },
                     Err(e) => {
@@ -419,10 +429,10 @@ impl RestTransport {
 
 #[async_trait]
 impl Transport for RestTransport {
-    async fn init(&mut self, opts: V3Options) -> Result<Pin<Box<dyn Stream<Item = Result<InitResponse, StagehandError>> + Send>>, StagehandError> {
+    async fn start(&mut self, opts: V3Options) -> Result<Pin<Box<dyn Stream<Item = Result<StartResponse, StagehandError>> + Send>>, StagehandError> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
-        struct InitPayload<'a> {
+        struct StartPayload<'a> {
             model_name: String,
             #[serde(skip_serializing_if = "Option::is_none")]
             dom_settle_timeout_ms: Option<u32>,
@@ -450,7 +460,7 @@ impl Transport for RestTransport {
             Model::Config { model_name, .. } => model_name.clone(),
         }).unwrap_or_else(|| "openai/gpt-5-nano".to_string());
 
-        let payload = InitPayload {
+        let payload = StartPayload {
             model_name,
             dom_settle_timeout_ms: opts.dom_settle_timeout_ms,
             verbose: opts.verbose.map(|v| v.to_string()),
@@ -465,7 +475,7 @@ impl Transport for RestTransport {
 
         let body = serde_json::to_value(payload).map_err(|e| StagehandError::Api(e.to_string()))?;
 
-        // Init uses regular HTTP POST, not SSE streaming
+        // Start uses regular HTTP POST, not SSE streaming
         let url = format!("{}/sessions/start", self.base_url);
         let response = self.client
             .post(&url)
@@ -497,8 +507,8 @@ impl Transport for RestTransport {
             .to_string();
 
         // Return a single-item stream with the result
-        let result = InitResponse {
-            event: Some(InitResponseEvent::Result(InitResult { session_id }))
+        let result = StartResponse {
+            event: Some(StartResponseEvent::Result(StartResult { session_id }))
         };
 
         Ok(Box::pin(futures::stream::once(async move { Ok(result) })))
@@ -876,7 +886,7 @@ impl Transport for RestTransport {
         })))
     }
 
-    async fn close(&mut self, session_id: &str) -> Result<(), StagehandError> {
+    async fn end(&mut self, session_id: &str) -> Result<(), StagehandError> {
         let url = format!("{}/sessions/{}/end", self.base_url, session_id);
         self.client.post(&url)
             .header("x-bb-api-key", &self.api_key)
@@ -906,12 +916,12 @@ impl Stagehand {
         Ok(Self { transport, session_id: None })
     }
 
-    pub async fn init(&mut self, opts: V3Options) -> Result<(), StagehandError> {
-        let mut stream = self.transport.init(opts).await?;
+    pub async fn start(&mut self, opts: V3Options) -> Result<(), StagehandError> {
+        let mut stream = self.transport.start(opts).await?;
         while let Some(item) = stream.next().await {
             match item {
                 Ok(response) => {
-                    if let Some(InitResponseEvent::Result(res)) = response.event {
+                    if let Some(StartResponseEvent::Result(res)) = response.event {
                         if !res.session_id.is_empty() {
                             self.session_id = Some(res.session_id);
                             return Ok(());
@@ -921,7 +931,7 @@ impl Stagehand {
                 Err(e) => return Err(e),
             }
         }
-        Err(StagehandError::Api("Init stream ended without a session ID.".to_string()))
+        Err(StagehandError::Api("Start did not return a session ID.".to_string()))
     }
 
     pub async fn navigate(&mut self, url: impl Into<String>, timeout: Option<u32>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<NavigateResponse, StagehandError>> + Send>>, StagehandError> {
@@ -934,10 +944,22 @@ impl Stagehand {
         self.transport.act(&session_id, instruction.into(), model, variables, timeout, frame_id).await
     }
 
-    pub async fn extract<S: Serialize>(&mut self, instruction: impl Into<String>, schema: &S, model: Option<Model>, timeout: Option<u32>, selector: Option<String>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<ExtractResponse, StagehandError>> + Send>>, StagehandError> {
+    /// Extract data from the page using AI.
+    ///
+    /// The `schema` parameter should be a JSON Schema object describing the expected output format.
+    /// Example:
+    /// ```json
+    /// {
+    ///   "type": "object",
+    ///   "properties": {
+    ///     "title": { "type": "string" },
+    ///     "description": { "type": "string" }
+    ///   }
+    /// }
+    /// ```
+    pub async fn extract(&mut self, instruction: impl Into<String>, schema: serde_json::Value, model: Option<Model>, timeout: Option<u32>, selector: Option<String>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<ExtractResponse, StagehandError>> + Send>>, StagehandError> {
         let session_id = self.session_id.as_ref().ok_or_else(|| StagehandError::Api("Session not initialized".to_string()))?.clone();
-        let schema_value = serde_json::to_value(schema).map_err(|e| StagehandError::Api(e.to_string()))?;
-        self.transport.extract(&session_id, instruction.into(), schema_value, model, timeout, selector, frame_id).await
+        self.transport.extract(&session_id, instruction.into(), schema, model, timeout, selector, frame_id).await
     }
 
     pub async fn observe(&mut self, instruction: Option<String>, model: Option<Model>, timeout: Option<u32>, selector: Option<String>, frame_id: Option<String>) -> Result<Pin<Box<dyn Stream<Item = Result<ObserveResponse, StagehandError>> + Send>>, StagehandError> {
@@ -950,9 +972,9 @@ impl Stagehand {
         self.transport.execute(&session_id, agent_config, execute_options, frame_id).await
     }
 
-    pub async fn close(&mut self) -> Result<(), StagehandError> {
-        let session_id = self.session_id.as_ref().ok_or_else(|| StagehandError::Api("Session not initialized".to_string()))?.clone();
-        self.transport.close(&session_id).await
+    pub async fn end(&mut self) -> Result<(), StagehandError> {
+        let session_id = self.session_id.as_ref().ok_or_else(|| StagehandError::Api("Session not started".to_string()))?.clone();
+        self.transport.end(&session_id).await
     }
 
     /// Returns the Browserbase session ID if initialized
