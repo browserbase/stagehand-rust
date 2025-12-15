@@ -10,8 +10,8 @@
 use chromiumoxide::browser::Browser;
 use chromiumoxide::cdp::browser_protocol::page::NavigateParams;
 use futures::StreamExt;
-use stagehand::{ActResponseEvent, ExtractResponseEvent};
-use stagehand::{Env, Model, Stagehand, TransportChoice, V3Options};
+use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent};
+use stagehand_sdk::{Env, Model, Stagehand, TransportChoice, V3Options};
 use std::collections::HashMap;
 
 /// Test that creates a Browserbase session via Stagehand and connects chromiumoxide to it

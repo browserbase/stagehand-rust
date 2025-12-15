@@ -39,7 +39,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-stagehand-sdk = { git = "https://github.com/browserbase/stagehand-rust" }
+stagehand_sdk = "0.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
@@ -54,22 +54,22 @@ The SDK supports both **tokio** and **async-std** runtimes. Tokio is enabled by 
 **Using tokio (default):**
 ```toml
 [dependencies]
-stagehand-sdk = { git = "https://github.com/browserbase/stagehand-rust" }
+stagehand_sdk = "0.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
 **Using async-std:**
 ```toml
 [dependencies]
-stagehand-sdk = { git = "https://github.com/browserbase/stagehand-rust", default-features = false, features = ["async-std-runtime"] }
+stagehand_sdk = { version = "0.3", default-features = false, features = ["async-std-runtime"] }
 async-std = { version = "1", features = ["attributes"] }
 ```
 
 ## Quick Start
 
 ```rust
-use stagehand::{Stagehand, V3Options, Env, Model, TransportChoice};
-use stagehand::{ActResponseEvent, ExtractResponseEvent};
+use stagehand_sdk::{Stagehand, V3Options, Env, Model, TransportChoice};
+use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -473,7 +473,7 @@ pub async fn execute(
 **Example:**
 
 ```rust
-use stagehand::{AgentConfig, AgentExecuteOptions, ModelConfiguration};
+use stagehand_sdk::{AgentConfig, AgentExecuteOptions, ModelConfiguration};
 
 let agent_config = AgentConfig {
     provider: None,
@@ -556,7 +556,7 @@ See [`tests/chromiumoxide_integration.rs`](tests/chromiumoxide_integration.rs) f
 
 ```rust
 use chromiumoxide::browser::Browser;
-use stagehand::{Stagehand, V3Options, Env, Model, TransportChoice};
+use stagehand_sdk::{Stagehand, V3Options, Env, Model, TransportChoice};
 
 async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // 1. Create Stagehand session
@@ -627,7 +627,7 @@ cargo test test_chromiumoxide_browserbase_connection -- --nocapture
 
 ## License
 
-MIT
+Apache-2.0
 
 ## Links
 
