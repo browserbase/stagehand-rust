@@ -1037,9 +1037,20 @@ impl Stagehand {
         let session_data: serde_json::Value = response.json().await
             .map_err(|e| StagehandError::Api(format!("Failed to parse session response: {}", e)))?;
 
-        session_data["connectUrl"]
+        let connect_url = session_data["connectUrl"]
             .as_str()
-            .map(|s| s.to_string())
-            .ok_or_else(|| StagehandError::Api("Session response missing connectUrl".to_string()))
+            .ok_or_else(|| StagehandError::Api("Session response missing connectUrl".to_string()))?;
+
+        // Fix URL format: Browserbase returns URLs like "wss://host?query" but AWS ELB
+        // requires a path before the query string. We normalize to "wss://host/?query"
+        if let Some((before_query, query)) = connect_url.split_once('?') {
+            // Check if there's no path after the host (no '/' after "://")
+            if let Some((_, after_scheme)) = before_query.split_once("://") {
+                if !after_scheme.contains('/') {
+                    return Ok(format!("{}/?{}", before_query, query));
+                }
+            }
+        }
+        Ok(connect_url.to_string())
     }
 }

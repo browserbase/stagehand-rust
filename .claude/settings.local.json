@@ -4,7 +4,10 @@
       "Bash(cd:*)",
       "Bash(cargo build:*)",
       "Bash(cargo test:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(set -a)",
+      "Bash(. .env)",
+      "Bash(set +a)"
     ],
     "deny": [],
     "ask": []

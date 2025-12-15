@@ -10,13 +10,14 @@
 use chromiumoxide::browser::Browser;
 use chromiumoxide::cdp::browser_protocol::page::NavigateParams;
 use futures::StreamExt;
-use stagehand_sdk::{Env, Model, Stagehand, TransportChoice, V3Options};
 use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent};
+use stagehand_sdk::{Env, Model, Stagehand, TransportChoice, V3Options};
 use std::collections::HashMap;
 
 /// Test that creates a Browserbase session via Stagehand and connects chromiumoxide to it
 #[tokio::test]
-async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_chromiumoxide_browserbase_connection(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Load environment variables
     dotenvy::dotenv().ok();
 
@@ -32,14 +33,16 @@ async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::
 
     let init_opts = V3Options {
         env: Some(Env::Browserbase),
-        model: Some(Model::String("openai/gpt-5-nano".into())),
+        model: Some(Model::String("openai/gpt-4o-mini".into())),
         verbose: Some(1),
         ..Default::default()
     };
 
     stagehand.start(init_opts).await?;
 
-    let session_id = stagehand.session_id().expect("Session ID should be set after start");
+    let session_id = stagehand
+        .session_id()
+        .expect("Session ID should be set after start");
     println!("   Session ID: {}", session_id);
 
     // 2. Get the CDP WebSocket URL (fetches connectUrl from Browserbase API)
@@ -79,9 +82,7 @@ async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::
     };
 
     // Navigate using CDP
-    page.execute(NavigateParams::builder()
-        .url("https://example.com")
-        .build()?)
+    page.execute(NavigateParams::builder().url("https://example.com").build()?)
         .await?;
 
     // Wait for page to load
@@ -90,12 +91,17 @@ async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::
     // Get the current URL using chromiumoxide
     let current_url = page.url().await?.unwrap_or_default();
     println!("   Current URL (via chromiumoxide): {}", current_url);
-    assert!(current_url.contains("example.com"), "Should be on example.com");
+    assert!(
+        current_url.contains("example.com"),
+        "Should be on example.com"
+    );
 
     // Get page title using chromiumoxide
-    let _nav_history = page.execute(
-        chromiumoxide::cdp::browser_protocol::page::GetNavigationHistoryParams::default()
-    ).await?;
+    let _nav_history = page
+        .execute(
+            chromiumoxide::cdp::browser_protocol::page::GetNavigationHistoryParams::default(),
+        )
+        .await?;
     println!("   Page loaded successfully!");
 
     // 5. Now use Stagehand's AI-powered methods on the same browser session
@@ -166,11 +172,13 @@ async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::
 
     // 8. Take a screenshot using chromiumoxide CDP
     println!("8. Taking screenshot via chromiumoxide CDP...");
-    let screenshot = page.screenshot(
-        chromiumoxide::page::ScreenshotParams::builder()
-            .format(chromiumoxide::cdp::browser_protocol::page::CaptureScreenshotFormat::Png)
-            .build(),
-    ).await?;
+    let screenshot = page
+        .screenshot(
+            chromiumoxide::page::ScreenshotParams::builder()
+                .format(chromiumoxide::cdp::browser_protocol::page::CaptureScreenshotFormat::Png)
+                .build(),
+        )
+        .await?;
     println!("   Screenshot captured: {} bytes", screenshot.len());
 
     // 9. Clean up
@@ -188,64 +196,9 @@ async fn test_chromiumoxide_browserbase_connection() -> Result<(), Box<dyn std::
     Ok(())
 }
 
-/// Test raw async-tungstenite connection to a Stagehand-created session
-#[tokio::test]
-async fn test_raw_websocket_connection() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    dotenvy::dotenv().ok();
-
-    println!("=== Raw WebSocket Connection Test (Stagehand Session) ===\n");
-
-    // Create a session via Stagehand API
-    let api_base = std::env::var("STAGEHAND_API_URL")
-        .unwrap_or_else(|_| "https://api.stagehand.browserbase.com/v1".to_string());
-
-    let mut stagehand = Stagehand::connect(TransportChoice::Rest(api_base)).await?;
-
-    let init_opts = V3Options {
-        env: Some(Env::Browserbase),
-        model: Some(Model::String("openai/gpt-5-nano".into())),
-        verbose: Some(1),
-        ..Default::default()
-    };
-
-    stagehand.start(init_opts).await?;
-    let session_id = stagehand.session_id().expect("Session ID should be set");
-    println!("Session ID: {}", session_id);
-
-    // Get the proper connectUrl via browserbase_cdp_url()
-    let cdp_url = stagehand.browserbase_cdp_url().await?;
-    println!("CDP URL: {}", cdp_url);
-
-    // Wait for session to be ready
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
-    // Try raw async-tungstenite connection
-    use async_tungstenite::tokio::connect_async_with_config;
-    use async_tungstenite::tungstenite::protocol::WebSocketConfig;
-
-    let config = WebSocketConfig::default()
-        .max_message_size(None)
-        .max_frame_size(None);
-
-    println!("Testing async-tungstenite connection...");
-    match connect_async_with_config(&cdp_url, Some(config)).await {
-        Ok((ws_stream, response)) => {
-            println!("SUCCESS! Response status: {:?}", response.status());
-            drop(ws_stream);
-        }
-        Err(e) => {
-            println!("FAILED: {:?}", e);
-        }
-    }
-
-    stagehand.end().await?;
-    println!("\n=== Test completed ===");
-
-    Ok(())
-}
-
 /// Simpler test that just verifies chromiumoxide can launch locally
 #[tokio::test]
+#[ignore] // Requires Chrome installed locally
 async fn test_chromiumoxide_local() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use chromiumoxide::browser::BrowserConfig;
 
