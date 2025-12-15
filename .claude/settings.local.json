@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)"
     ],
     "deny": [],
     "ask": []

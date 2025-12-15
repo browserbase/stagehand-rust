@@ -3,17 +3,18 @@
 A Rust client library for [Stagehand](https://stagehand.dev), the AI-powered browser automation framework. This SDK provides an async-first, type-safe interface for controlling browsers and performing AI-driven web interactions.
 
 > [!CAUTION]
-> This is an ALPHA release and is not be production-ready.  
+> This is an ALPHA release and is not production-ready.
 > Please provide feedback and let us know if you have feature requests / bug reports!
 
 ## Features
 
-- **Backend Support**: Currently only supports driving Browserbase cloud sessions
+- **Browserbase Cloud Support**: Drive Browserbase cloud browser sessions
 - **AI-Driven Actions**: Use natural language instructions to interact with web pages
 - **Structured Data Extraction**: Extract typed data from pages using Serde schemas
 - **Element Observation**: Identify and analyze interactive elements on pages
-- **Streaming Responses**: Real-time progress updates via async streams
-- **Type Safety**: Full Rust type safety with generated protobuf types
+- **Agent Execution**: Run multi-step AI agents with the `execute` method
+- **Streaming Responses**: Real-time progress updates via Server-Sent Events (SSE)
+- **CDP Access**: Get the CDP WebSocket URL to connect external tools like chromiumoxide
 
 ## Table of Contents
 
@@ -28,10 +29,9 @@ A Rust client library for [Stagehand](https://stagehand.dev), the AI-powered bro
   - [observe](#observe)
   - [execute](#execute)
   - [close](#close)
-- [Transport Modes](#transport-modes)
+  - [browserbase_cdp_url](#browserbase_cdp_url)
 - [Examples](#examples)
 - [Error Handling](#error-handling)
-- [Proto Specification](#proto-specification)
 
 ## Installation
 
@@ -44,16 +44,17 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+dotenvy = "0.15"
 ```
 
 ## Quick Start
 
-### Using Browserbase Cloud (REST API)
-
 ```rust
-use stagehand_sdk::{Stagehand, V3Options, Env, Model, Transport};
+use stagehand_sdk::{Stagehand, V3Options, Env, Model, TransportChoice};
+use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Quote {
@@ -63,39 +64,46 @@ struct Quote {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Load environment variables from .env file
+    dotenvy::dotenv().ok();
+
     // Environment variables required:
     // - BROWSERBASE_API_KEY
     // - BROWSERBASE_PROJECT_ID
-    // - OPENAI_API_KEY
+    // - OPENAI_API_KEY (or ANTHROPIC_API_KEY)
 
     // 1. Connect to Stagehand cloud API
     let mut stagehand = Stagehand::connect(
-        "https://api.stagehand.browserbase.com/v1".to_string(),
-        Transport::Rest("https://api.stagehand.browserbase.com/v1".to_string()),
+        TransportChoice::Rest("https://api.stagehand.browserbase.com/v1".to_string())
     ).await?;
 
     // 2. Initialize session
     let opts = V3Options {
         env: Some(Env::Browserbase),
-        model: Some(Model::String("openai/gpt-4o".into())),
+        model: Some(Model::String("openai/gpt-5-nano".into())),
         verbose: Some(2),
         ..Default::default()
     };
 
-    let mut init_stream = stagehand.init(opts).await?;
-    while let Some(res) = init_stream.next().await {
-        // Handle initialization events...
-    }
+    stagehand.init(opts).await?;
+    println!("Session ID: {:?}", stagehand.session_id());
 
     // 3. Navigate to a page
     let mut act_stream = stagehand.act(
         "Go to https://quotes.toscrape.com/",
         None,
-        Default::default(),
+        HashMap::new(),
         Some(60_000),
         None,
     ).await?;
-    while let Some(_) = act_stream.next().await {}
+
+    while let Some(res) = act_stream.next().await {
+        if let Ok(response) = res {
+            if let Some(ActResponseEvent::Success(success)) = response.event {
+                println!("Navigation success: {}", success);
+            }
+        }
+    }
 
     // 4. Extract structured data
     let schema = Quote { text: String::new(), author: String::new() };
@@ -110,7 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     while let Some(res) = extract_stream.next().await {
         if let Ok(response) = res {
-            if let Some(stagehand_sdk::proto::extract_response::Event::DataJson(json)) = response.event {
+            if let Some(ExtractResponseEvent::DataJson(json)) = response.event {
                 let quote: Quote = serde_json::from_str(&json)?;
                 println!("Quote: {} - {}", quote.text, quote.author);
             }
@@ -118,7 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     // 5. Clean up
-    stagehand.close(true).await?;
+    stagehand.close().await?;
     Ok(())
 }
 ```
@@ -130,12 +138,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 Create a `.env` file in your project root:
 
 ```env
-# Browserbase API credentials (required for REST transport)
+# Browserbase API credentials (required)
 BROWSERBASE_API_KEY=your_browserbase_api_key_here
 BROWSERBASE_PROJECT_ID=your_browserbase_project_id_here
 
-# OpenAI API key (required for LLM operations)
+# Model API key (at least one required)
 OPENAI_API_KEY=your_openai_api_key_here
+# or
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 
 ### V3Options
@@ -147,13 +157,13 @@ pub struct V3Options {
     // Environment: Local or Browserbase
     pub env: Option<Env>,
 
-    // Browserbase credentials (auto-loaded from env vars for REST)
+    // Browserbase credentials (auto-loaded from env vars)
     pub api_key: Option<String>,
     pub project_id: Option<String>,
     pub browserbase_session_id: Option<String>,
     pub browserbase_session_create_params: Option<serde_json::Value>,
 
-    // Local browser options
+    // Local browser options (for future use)
     pub local_browser_launch_options: Option<LocalBrowserLaunchOptions>,
 
     // AI model configuration
@@ -162,14 +172,13 @@ pub struct V3Options {
 
     // Behavior settings
     pub self_heal: Option<bool>,
+    pub wait_for_captcha_solves: Option<bool>,
     pub experimental: Option<bool>,
-    pub dom_settle_timeout: Option<u32>,
-    pub cache_dir: Option<String>,
+    pub dom_settle_timeout_ms: Option<u32>,
+    pub act_timeout_ms: Option<u32>,
 
-    // Logging
-    pub verbose: Option<i32>,  // 0, 1, or 2
-    pub log_inference_to_file: Option<bool>,
-    pub disable_pino: Option<bool>,
+    // Logging verbosity (0, 1, or 2)
+    pub verbose: Option<i32>,
 }
 ```
 
@@ -178,32 +187,15 @@ pub struct V3Options {
 Specify AI models in two ways:
 
 ```rust
-// Simple string format
-let model = Model::String("openai/gpt-4o".into());
+// Simple string format (recommended)
+let model = Model::String("openai/gpt-5-nano".into());
 
 // Detailed configuration with custom API key/base URL
 let model = Model::Config {
-    model_name: "gpt-4o".to_string(),
+    model_name: "gpt-5-nano".to_string(),
     api_key: Some("sk-...".to_string()),
     base_url: Some("https://api.openai.com/v1".to_string()),
 };
-```
-
-### ~~Local Browser Options~~ (Coming Soon)
-
-For local browser automation:
-
-```rust
-pub struct LocalBrowserLaunchOptions {
-    pub headless: Option<bool>,
-    pub executable_path: Option<String>,
-    pub args: Vec<String>,
-    pub user_data_dir: Option<String>,
-    pub viewport: Option<(i32, i32)>,  // (width, height)
-    pub devtools: Option<bool>,
-    pub ignore_https_errors: Option<bool>,
-    pub cdp_url: Option<String>,  // Connect to existing browser via CDP
-}
 ```
 
 ## API Reference
@@ -214,21 +206,19 @@ Establishes a connection to the Stagehand service.
 
 ```rust
 pub async fn connect(
-    dst: String,
-    transport_type: Transport,
-) -> Result<Self, Box<dyn std::error::Error + Send + Sync>>
+    transport_choice: TransportChoice,
+) -> Result<Self, StagehandError>
 ```
 
 **Parameters:**
-- `dst` - The destination URL (used for reference)
-- `transport_type` - only `Transport::Rest(base_url)` for now
+
+- `transport_choice` - `TransportChoice::Rest(base_url)` for REST API
 
 **Example:**
+
 ```rust
-// REST API (Browserbase cloud)
 let stagehand = Stagehand::connect(
-    "https://api.stagehand.browserbase.com/v1".to_string(),
-    Transport::Rest("https://api.stagehand.browserbase.com/v1".to_string()),
+    TransportChoice::Rest("https://api.stagehand.browserbase.com/v1".to_string()),
 ).await?;
 ```
 
@@ -236,36 +226,24 @@ let stagehand = Stagehand::connect(
 
 ### `init`
 
-Initializes a browser session. Returns a stream of log events and the final result.
+Initializes a browser session.
 
 ```rust
-pub async fn init(
-    &mut self,
-    opts: V3Options,
-) -> Result<Pin<Box<dyn Stream<Item = Result<proto::InitResponse, tonic::Status>> + Send>>, tonic::Status>
+pub async fn init(&mut self, opts: V3Options) -> Result<(), StagehandError>
 ```
 
-**Response Events:**
-- `InitResponse::Log(LogLine)` - Progress log messages
-- `InitResponse::Result(InitResult)` - Session initialization complete (contains session ID for REST)
-
 **Example:**
+
 ```rust
-let mut stream = stagehand.init(opts).await?;
-while let Some(res) = stream.next().await {
-    match res {
-        Ok(response) => match response.event {
-            Some(proto::init_response::Event::Log(log)) => {
-                println!("[{}] {}", log.category, log.message);
-            }
-            Some(proto::init_response::Event::Result(result)) => {
-                println!("Session initialized: {}", result.unused);
-            }
-            _ => {}
-        },
-        Err(e) => eprintln!("Error: {:?}", e),
-    }
-}
+let opts = V3Options {
+    env: Some(Env::Browserbase),
+    model: Some(Model::String("openai/gpt-5-nano".into())),
+    verbose: Some(1),
+    ..Default::default()
+};
+
+stagehand.init(opts).await?;
+println!("Session: {}", stagehand.session_id().unwrap());
 ```
 
 ---
@@ -280,23 +258,26 @@ pub async fn act(
     instruction: impl Into<String>,
     model: Option<Model>,
     variables: HashMap<String, String>,
-    timeout_ms: Option<u32>,
+    timeout: Option<u32>,
     frame_id: Option<String>,
-) -> Result<Pin<Box<dyn Stream<Item = Result<proto::ActResponse, tonic::Status>> + Send>>, tonic::Status>
+) -> Result<Pin<Box<dyn Stream<Item = Result<ActResponse, StagehandError>> + Send>>, StagehandError>
 ```
 
 **Parameters:**
+
 - `instruction` - Natural language instruction (e.g., "Click the login button")
 - `model` - Override the default AI model
 - `variables` - Variable substitution map for the instruction
-- `timeout_ms` - Operation timeout in milliseconds
+- `timeout` - Operation timeout in milliseconds
 - `frame_id` - Target a specific iframe
 
 **Response Events:**
-- `ActResponse::Log(LogLine)` - Progress logs
-- `ActResponse::Success(bool)` - Action completion status
+
+- `ActResponseEvent::Log(LogLine)` - Progress logs
+- `ActResponseEvent::Success(bool)` - Action completion status
 
 **Example:**
+
 ```rust
 let mut stream = stagehand.act(
     "Navigate to https://example.com and click 'More information...'",
@@ -308,7 +289,7 @@ let mut stream = stagehand.act(
 
 while let Some(res) = stream.next().await {
     if let Ok(response) = res {
-        if let Some(proto::act_response::Event::Success(success)) = response.event {
+        if let Some(ActResponseEvent::Success(success)) = response.event {
             println!("Action succeeded: {}", success);
         }
     }
@@ -327,25 +308,28 @@ pub async fn extract<S: Serialize>(
     instruction: impl Into<String>,
     schema: &S,
     model: Option<Model>,
-    timeout_ms: Option<u32>,
+    timeout: Option<u32>,
     selector: Option<String>,
     frame_id: Option<String>,
-) -> Result<Pin<Box<dyn Stream<Item = Result<proto::ExtractResponse, tonic::Status>> + Send>>, tonic::Status>
+) -> Result<Pin<Box<dyn Stream<Item = Result<ExtractResponse, StagehandError>> + Send>>, StagehandError>
 ```
 
 **Parameters:**
+
 - `instruction` - What data to extract
 - `schema` - A Serde-serializable struct defining the expected shape
 - `model` - Override the default AI model
-- `timeout_ms` - Operation timeout
+- `timeout` - Operation timeout
 - `selector` - CSS selector to narrow extraction scope
 - `frame_id` - Target a specific iframe
 
 **Response Events:**
-- `ExtractResponse::Log(LogLine)` - Progress logs
-- `ExtractResponse::DataJson(String)` - JSON string matching the schema
+
+- `ExtractResponseEvent::Log(LogLine)` - Progress logs
+- `ExtractResponseEvent::DataJson(String)` - JSON string matching the schema
 
 **Example:**
+
 ```rust
 #[derive(Serialize, Deserialize, Debug)]
 struct ProductInfo {
@@ -371,7 +355,7 @@ let mut stream = stagehand.extract(
 
 while let Some(res) = stream.next().await {
     if let Ok(response) = res {
-        if let Some(proto::extract_response::Event::DataJson(json)) = response.event {
+        if let Some(ExtractResponseEvent::DataJson(json)) = response.event {
             let product: ProductInfo = serde_json::from_str(&json)?;
             println!("Product: {:?}", product);
         }
@@ -390,49 +374,40 @@ pub async fn observe(
     &mut self,
     instruction: Option<String>,
     model: Option<Model>,
-    timeout_ms: Option<u32>,
+    timeout: Option<u32>,
     selector: Option<String>,
-    only_selectors: Vec<String>,
     frame_id: Option<String>,
-) -> Result<Pin<Box<dyn Stream<Item = Result<proto::ObserveResponse, tonic::Status>> + Send>>, tonic::Status>
+) -> Result<Pin<Box<dyn Stream<Item = Result<ObserveResponse, StagehandError>> + Send>>, StagehandError>
 ```
 
 **Parameters:**
+
 - `instruction` - Optional AI instruction for analysis
 - `model` - Override the default AI model
-- `timeout_ms` - Operation timeout
+- `timeout` - Operation timeout
 - `selector` - CSS selector to narrow observation scope
-- `only_selectors` - Limit to specific selectors
 - `frame_id` - Target a specific iframe
 
 **Response Events:**
-- `ObserveResponse::Log(LogLine)` - Progress logs
-- `ObserveResponse::ElementsJson(String)` - JSON array of observed elements
+
+- `ObserveResponseEvent::Log(LogLine)` - Progress logs
+- `ObserveResponseEvent::ElementsJson(String)` - JSON array of observed elements
 
 **Example:**
-```rust
-#[derive(Deserialize, Debug)]
-struct ObservedElement {
-    selector: String,
-    description: String,
-}
 
+```rust
 let mut stream = stagehand.observe(
     Some("Find all clickable buttons".to_string()),
     None,
     Some(30_000),
     None,
-    vec![],
     None,
 ).await?;
 
 while let Some(res) = stream.next().await {
     if let Ok(response) = res {
-        if let Some(proto::observe_response::Event::ElementsJson(json)) = response.event {
-            let elements: Vec<ObservedElement> = serde_json::from_str(&json)?;
-            for el in elements {
-                println!("Found: {} ({})", el.description, el.selector);
-            }
+        if let Some(ObserveResponseEvent::ElementsJson(json)) = response.event {
+            println!("Elements: {}", json);
         }
     }
 }
@@ -442,47 +417,55 @@ while let Some(res) = stream.next().await {
 
 ### `execute`
 
-Executes JavaScript or agent instructions.
+Executes an AI agent with multi-step capabilities.
 
 ```rust
 pub async fn execute(
     &mut self,
-    session_id: String,
-    instruction: String,
+    agent_config: AgentConfig,
+    execute_options: AgentExecuteOptions,
     frame_id: Option<String>,
-    agent_config: Option<AgentConfig>,
-    execute_options: Option<AgentExecuteOptions>,
-) -> Result<Pin<Box<dyn Stream<Item = Result<proto::ExecuteResponse, tonic::Status>> + Send>>, tonic::Status>
+) -> Result<Pin<Box<dyn Stream<Item = Result<ExecuteResponse, StagehandError>> + Send>>, StagehandError>
 ```
 
 **Parameters:**
-- `session_id` - The active session ID
-- `instruction` - JavaScript code or agent instruction
+
+- `agent_config` - Agent configuration (provider, model, system prompt, CUA mode)
+- `execute_options` - Execution options (instruction, max steps, highlight cursor)
 - `frame_id` - Target a specific iframe
-- `agent_config` - Advanced agent configuration
-- `execute_options` - Execution parameters
 
 **Response Events:**
-- `ExecuteResponse::Progress(String)` - Execution progress
-- `ExecuteResponse::Result(String)` - Final result
+
+- `ExecuteResponseEvent::Log(LogLine)` - Execution progress
+- `ExecuteResponseEvent::ResultJson(String)` - Final result
 
 **Example:**
+
 ```rust
+use stagehand_sdk::{AgentConfig, AgentExecuteOptions, ModelConfiguration};
+
+let agent_config = AgentConfig {
+    provider: None,
+    model: Some(ModelConfiguration::String("openai/gpt-5-nano".into())),
+    system_prompt: None,
+    cua: None,
+};
+
+let execute_options = AgentExecuteOptions {
+    instruction: "What is the URL of the current page?".to_string(),
+    max_steps: Some(10),
+    highlight_cursor: None,
+};
+
 let mut stream = stagehand.execute(
-    session_id,
-    "Return the current page's URL".to_string(),
-    Some("main".to_string()),
+    agent_config,
+    execute_options,
     None,
-    Some(AgentExecuteOptions {
-        instruction: "Return the current page's URL".to_string(),
-        page: Some("main".to_string()),
-        timeout: Some(10_000),
-    }),
 ).await?;
 
 while let Some(res) = stream.next().await {
     if let Ok(response) = res {
-        if let Some(proto::execute_response::Event::Result(result)) = response.event {
+        if let Some(ExecuteResponseEvent::ResultJson(result)) = response.event {
             println!("Result: {}", result);
         }
     }
@@ -496,198 +479,103 @@ while let Some(res) = stream.next().await {
 Closes the browser session.
 
 ```rust
-pub async fn close(&mut self, force: bool) -> Result<(), tonic::Status>
+pub async fn close(&mut self) -> Result<(), StagehandError>
 ```
-
-**Parameters:**
-- `force` - Force close the session immediately
 
 **Example:**
-```rust
-stagehand.close(true).await?;
-```
-
-## Transport Modes
-
-### REST API (Browserbase Cloud)
-
-The REST transport connects to Browserbase's managed browser infrastructure using Server-Sent Events (SSE) for streaming.
 
 ```rust
-let stagehand = Stagehand::connect(
-    "https://api.stagehand.browserbase.com/v1".to_string(),
-    Transport::Rest("https://api.stagehand.browserbase.com/v1".to_string()),
-).await?;
+stagehand.close().await?;
 ```
 
-**Required environment variables:**
-- `BROWSERBASE_API_KEY`
-- `BROWSERBASE_PROJECT_ID`
-- `OPENAI_API_KEY` (for OpenAI models)
+---
 
+### `browserbase_cdp_url`
+
+Returns the CDP WebSocket URL for connecting external tools like chromiumoxide.
+
+```rust
+pub fn browserbase_cdp_url(&self) -> Option<String>
+```
+
+The URL format is: `wss://connect.browserbase.com?sessionId={sessionId}&apiKey={apiKey}`
+
+**Example:**
+
+```rust
+// After init(), get the CDP URL to connect chromiumoxide
+let cdp_url = stagehand.browserbase_cdp_url()
+    .expect("CDP URL available after init");
+
+// Connect chromiumoxide to the remote browser
+let (browser, handler) = Browser::connect(&cdp_url).await?;
+```
+
+See [`tests/chromiumoxide_integration.rs`](tests/chromiumoxide_integration.rs) for a complete example.
 
 ## Examples
 
 ### Full Integration Example
 
-See [`tests/browserbase_live.rs`](tests/browserbase_live.rs) for a complete working example:
+See [`tests/browserbase_live.rs`](tests/browserbase_live.rs) for a complete working example that demonstrates act, extract, and execute.
+
+### Chromiumoxide Integration
+
+See [`tests/chromiumoxide_integration.rs`](tests/chromiumoxide_integration.rs) for connecting chromiumoxide to a Browserbase session:
 
 ```rust
-use stagehand_sdk::{Stagehand, V3Options, Env, Model, Transport};
-use tokio_stream::StreamExt;
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Quote {
-    text: String,
-    author: String,
-}
-
-#[tokio::test]
-async fn test_browserbase_live_extract() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    dotenvy::dotenv().ok();
-
-    let mut stagehand = Stagehand::connect(
-        "https://api.stagehand.browserbase.com/v1".to_string(),
-        Transport::Rest("https://api.stagehand.browserbase.com/v1".to_string()),
-    ).await?;
-
-    let init_opts = V3Options {
-        env: Some(Env::Browserbase),
-        model: Some(Model::String("openai/gpt-4o".into())),
-        ..Default::default()
-    };
-
-    let mut init_stream = stagehand.init(init_opts).await?;
-    while let Some(_) = init_stream.next().await {}
-
-    // Navigate
-    let mut act_stream = stagehand.act(
-        "Go to https://quotes.toscrape.com/",
-        None,
-        Default::default(),
-        Some(60_000),
-        None,
-    ).await?;
-    while let Some(_) = act_stream.next().await {}
-
-    // Extract
-    let schema = Quote { text: String::new(), author: String::new() };
-    let mut extract_stream = stagehand.extract(
-        "Extract the first quote on the page",
-        &schema,
-        None,
-        Some(60_000),
-        None,
-        None,
-    ).await?;
-
-    let mut extracted: Option<Quote> = None;
-    while let Some(res) = extract_stream.next().await {
-        if let Ok(response) = res {
-            if let Some(stagehand_sdk::proto::extract_response::Event::DataJson(json)) = response.event {
-                extracted = Some(serde_json::from_str(&json)?);
-            }
-        }
-    }
-
-    stagehand.close(true).await?;
-
-    assert!(extracted.is_some());
-    assert_eq!(extracted.unwrap().author, "Albert Einstein");
-    Ok(())
-}
-```
-
-### ~~Local Browser with Chromiumoxide~~ (Coming Soon)
-
-See [`tests/chromiumoxide_integration.rs`](tests/chromiumoxide_integration.rs) for using a local browser:
-
-```rust
-use chromiumoxide::browser::{Browser, BrowserConfig};
-use stagehand_sdk::{Stagehand, V3Options, LocalBrowserLaunchOptions, Transport};
+use chromiumoxide::browser::Browser;
+use stagehand_sdk::{Stagehand, V3Options, Env, Model, TransportChoice};
 
 async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Launch local browser
-    let (browser, handler) = Browser::launch(
-        BrowserConfig::builder()
-            .with_head()
-            .window_size(1280, 720)
-            .build()?,
-    ).await?;
-
-    // Get WebSocket URL for CDP connection
-    let ws_url = browser.websocket_address();
-
-    // Connect Stagehand to the running browser
+    // 1. Create Stagehand session
     let mut stagehand = Stagehand::connect(
-        "http://127.0.0.1:50051".to_string(),
-        Transport::Rest("https://api.stagehand.browserbase.com/v1".to_string()),
+        TransportChoice::Rest("https://api.stagehand.browserbase.com/v1".to_string())
     ).await?;
 
-    let opts = V3Options {
-        local_browser_launch_options: Some(LocalBrowserLaunchOptions {
-            cdp_url: Some(ws_url.to_string()),
-            headless: Some(false),
-            viewport: Some((1280, 720)),
-            ..Default::default()
-        }),
+    stagehand.init(V3Options {
+        env: Some(Env::Browserbase),
+        model: Some(Model::String("openai/gpt-5-nano".into())),
         ..Default::default()
-    };
+    }).await?;
 
-    // Use stagehand...
+    // 2. Get CDP URL and connect chromiumoxide
+    let cdp_url = stagehand.browserbase_cdp_url().unwrap();
+    let (browser, mut handler) = Browser::connect(&cdp_url).await?;
+
+    // Spawn handler
+    tokio::spawn(async move {
+        while let Some(event) = handler.next().await {
+            if event.is_err() { break; }
+        }
+    });
+
+    // 3. Use chromiumoxide for direct CDP control
+    let page = browser.pages().await?.into_iter().next().unwrap();
+    let screenshot = page.screenshot(Default::default()).await?;
+
+    // 4. Or use Stagehand's AI methods
+    let mut stream = stagehand.act("Click the login button", None, Default::default(), None, None).await?;
+    // ...
+
+    stagehand.close().await?;
     Ok(())
 }
 ```
 
 ## Error Handling
 
-The SDK provides a comprehensive error type:
+The SDK uses `StagehandError` for all error cases:
 
 ```rust
-pub enum StagehandAPIError {
-    Http(reqwest::Error),
-    Api(String),
-    Unauthorized(String),
-    ConnectionRefused(String),
-    ResponseParse(String),
-    ResponseBody(String),
-    ServerError(String),
-    MissingSessionId,
-    MissingApiKey(String),
-    TonicStatus(tonic::Status),
-    EventSource(eventsource_client::Error),
-    Timeout,
+pub enum StagehandError {
+    Transport(String),      // Network/connection errors
+    Api(String),            // API response errors
+    MissingApiKey(String),  // Missing required environment variable
 }
 ```
 
-All errors implement `std::error::Error` and can be converted to `tonic::Status` for consistency.
-
-## Proto Specification
-
-The SDK is built on the following service definition:
-
-```protobuf
-service StagehandService {
-  rpc Init (InitRequest) returns (stream InitResponse);
-  rpc Act (ActRequest) returns (stream ActResponse);
-  rpc Extract (ExtractRequest) returns (stream ExtractResponse);
-  rpc Observe (ObserveRequest) returns (stream ObserveResponse);
-  rpc Execute (ExecuteRequest) returns (stream ExecuteResponse);
-  rpc Close (CloseRequest) returns (CloseResponse);
-}
-```
-
-### Key Message Types
-
-| Type | Description |
-|------|-------------|
-| `InitRequest` | Session configuration (env, credentials, browser options, AI model) |
-| `ActRequest` | Natural language instruction with optional model/variables/timeout |
-| `ExtractRequest` | Extraction instruction with JSON schema |
-| `ObserveRequest` | Element observation with optional instruction/selectors |
-| `ExecuteRequest` | JavaScript/agent code execution |
-| `LogLine` | Structured log message (category, message, auxiliary JSON) |
+All errors implement `std::error::Error` and `Display`.
 
 ## Running Tests
 
@@ -699,11 +587,11 @@ cp .env.example .env
 # Run all tests
 cargo test
 
-# Run specific integration test
+# Run specific integration test with output
 cargo test test_browserbase_live_extract -- --nocapture
 
-# Run local browser test
-cargo test test_chromiumoxide_basic -- --nocapture
+# Run chromiumoxide integration test
+cargo test test_chromiumoxide_browserbase_connection -- --nocapture
 ```
 
 ## License
