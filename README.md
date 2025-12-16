@@ -1,4 +1,5 @@
-# Stagehand Rust SDK [ALPHA]  <img height="40" alt="Rust logo" src="https://github.com/user-attachments/assets/ee66721b-25a3-4f85-ac1f-a5b2fd5d7013" align="right"/>
+# Stagehand Rust SDK [ALPHA]  <img height="40" alt="Stagehand logo" src="https://github.com/user-attachments/assets/0b264628-bf81-4130-b378-b9f6b7fcf76f" align="right"/><img height="40" alt="Rust logo" src="https://github.com/user-attachments/assets/ee66721b-25a3-4f85-ac1f-a5b2fd5d7013" align="right"/>
+
 
 
 [![Crates.io](https://img.shields.io/crates/v/stagehand_sdk.svg)](https://crates.io/crates/stagehand_sdk)
