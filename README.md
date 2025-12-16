@@ -1,7 +1,7 @@
 # Stagehand Rust SDK [ALPHA]
 
 [![Crates.io](https://img.shields.io/crates/v/stagehand_sdk.svg)](https://crates.io/crates/stagehand_sdk)
-[![Documentation](https://docs.rs/stagehand_sdk/badge.svg)](https://docs.rs/stagehand_sdk)
+[![Documentation](https://img.shields.io/badge/docs-API%20Reference-blue)](https://github.com/browserbase/stagehand-rust#api-reference)
 [![License](https://img.shields.io/crates/l/stagehand_sdk.svg)](https://github.com/browserbase/stagehand-rust/blob/main/LICENSE)
 [![Downloads](https://img.shields.io/crates/d/stagehand_sdk.svg)](https://crates.io/crates/stagehand_sdk)
 
