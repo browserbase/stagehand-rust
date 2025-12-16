@@ -1,5 +1,10 @@
 # Stagehand Rust SDK [ALPHA]
 
+[![Crates.io](https://img.shields.io/crates/v/stagehand_sdk.svg)](https://crates.io/crates/stagehand_sdk)
+[![Documentation](https://docs.rs/stagehand_sdk/badge.svg)](https://docs.rs/stagehand_sdk)
+[![License](https://img.shields.io/crates/l/stagehand_sdk.svg)](https://github.com/browserbase/stagehand-rust/blob/main/LICENSE)
+[![Downloads](https://img.shields.io/crates/d/stagehand_sdk.svg)](https://crates.io/crates/stagehand_sdk)
+
 A Rust client library for [Stagehand](https://stagehand.dev), the AI-powered browser automation framework. This SDK provides an async-first, type-safe interface for controlling browsers and performing AI-driven web interactions.
 
 > [!CAUTION]
