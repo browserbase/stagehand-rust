@@ -1,4 +1,5 @@
-# Stagehand Rust SDK [ALPHA]
+# Stagehand Rust SDK [ALPHA]  <img height="40" alt="Rust logo" src="https://github.com/user-attachments/assets/ee66721b-25a3-4f85-ac1f-a5b2fd5d7013" align="right"/>
+
 
 [![Crates.io](https://img.shields.io/crates/v/stagehand_sdk.svg)](https://crates.io/crates/stagehand_sdk)
 [![Documentation](https://img.shields.io/badge/docs-API%20Reference-blue)](https://github.com/browserbase/stagehand-rust#api-reference)
