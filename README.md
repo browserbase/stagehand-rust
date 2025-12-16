@@ -8,7 +8,7 @@
 A Rust client library for [Stagehand](https://stagehand.dev), the AI-powered browser automation framework. This SDK provides an async-first, type-safe interface for controlling [Browserbase browsers](https://browserbase.com/) and performing AI-driven web interactions.
 
 > [!CAUTION]
-> This is an ALPHA release and is not production-ready.
+> This is an ALPHA release and is not production-ready.  
 > Please provide feedback and let us know if you have feature requests / bug reports!
 
 ## Features
