@@ -636,6 +636,8 @@ Apache-2.0
 
 ## Links
 
-- [Stagehand Documentation](https://docs.stagehand.dev)
-- [Browserbase](https://browserbase.com)
-- [GitHub Repository](https://github.com/browserbase/stagehand-rust)
+- [GitHub Repository: `stagehand-rust`](https://github.com/browserbase/stagehand-rust)
+- [Crates.io: `stagehand_sdk`](https://crates.io/crates/stagehand_sdk)
+- [Stagehand REST API Documentation](https://stagehand.stldocs.app/api)
+- [Stagehand TS Library Documentation](https://docs.stagehand.dev)
+- [Browserbase Cloud](https://browserbase.com)
