@@ -95,10 +95,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // - BROWSERBASE_PROJECT_ID
     // - A model API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, etc.)
 
-    // 1. Connect to Stagehand cloud API
-    let mut stagehand = Stagehand::connect(
-        TransportChoice::Rest("https://api.stagehand.browserbase.com/v1".to_string())
-    ).await?;
+    // 1. Connect to Stagehand cloud API (uses STAGEHAND_API_URL env var or default)
+    let mut stagehand = Stagehand::connect(TransportChoice::default_rest()).await?;
 
     // 2. Start session
     let opts = V3Options {
@@ -180,6 +178,9 @@ MISTRAL_API_KEY=your_mistral_key                    # Mistral
 GROQ_API_KEY=your_groq_key                          # Groq
 CEREBRAS_API_KEY=your_cerebras_key                  # Cerebras
 DEEPSEEK_API_KEY=your_deepseek_key                  # DeepSeek
+
+# Optional: Custom Stagehand API URL (defaults to https://api.stagehand.browserbase.com/v1)
+STAGEHAND_API_URL=https://api.stagehand.browserbase.com/v1
 ```
 
 The SDK checks for model API keys in the order listed above and uses the first one found.
@@ -248,11 +249,15 @@ pub async fn connect(
 
 **Parameters:**
 
-- `transport_choice` - `TransportChoice::Rest(base_url)` for REST API
+- `transport_choice` - `TransportChoice::Rest(base_url)` for REST API with explicit URL, or use `TransportChoice::default_rest()` to use the `STAGEHAND_API_URL` env var (falls back to default)
 
 **Example:**
 
 ```rust
+// Using default (recommended) - checks STAGEHAND_API_URL env var, falls back to default
+let stagehand = Stagehand::connect(TransportChoice::default_rest()).await?;
+
+// Or with explicit URL
 let stagehand = Stagehand::connect(
     TransportChoice::Rest("https://api.stagehand.browserbase.com/v1".to_string()),
 ).await?;
@@ -565,9 +570,7 @@ use stagehand_sdk::{Stagehand, V3Options, Env, Model, TransportChoice};
 
 async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // 1. Create Stagehand session
-    let mut stagehand = Stagehand::connect(
-        TransportChoice::Rest("https://api.stagehand.browserbase.com/v1".to_string())
-    ).await?;
+    let mut stagehand = Stagehand::connect(TransportChoice::default_rest()).await?;
 
     stagehand.start(V3Options {
         env: Some(Env::Browserbase),

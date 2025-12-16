@@ -24,12 +24,9 @@ async fn test_chromiumoxide_browserbase_connection(
     println!("=== Chromiumoxide + Browserbase Integration Test ===\n");
 
     // 1. Create a Stagehand session - this provisions a Browserbase cloud browser
-    let api_base = std::env::var("STAGEHAND_API_URL")
-        .unwrap_or_else(|_| "https://api.stagehand.browserbase.com/v1".to_string());
+    println!("1. Creating Stagehand session...");
 
-    println!("1. Creating Stagehand session at: {}", api_base);
-
-    let mut stagehand = Stagehand::connect(TransportChoice::Rest(api_base)).await?;
+    let mut stagehand = Stagehand::connect(TransportChoice::default_rest()).await?;
 
     let init_opts = V3Options {
         env: Some(Env::Browserbase),
