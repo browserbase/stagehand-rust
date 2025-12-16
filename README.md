@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/crates/l/stagehand_sdk.svg)](https://github.com/browserbase/stagehand-rust/blob/main/LICENSE)
 [![Downloads](https://img.shields.io/crates/d/stagehand_sdk.svg)](https://crates.io/crates/stagehand_sdk)
 
-A Rust client library for [Stagehand](https://stagehand.dev), the AI-powered browser automation framework. This SDK provides an async-first, type-safe interface for controlling browsers and performing AI-driven web interactions.
+A Rust client library for [Stagehand](https://stagehand.dev), the AI-powered browser automation framework. This SDK provides an async-first, type-safe interface for controlling [Browserbase browsers](https://browserbase.com/) and performing AI-driven web interactions.
 
 > [!CAUTION]
 > This is an ALPHA release and is not production-ready.
@@ -13,7 +13,7 @@ A Rust client library for [Stagehand](https://stagehand.dev), the AI-powered bro
 
 ## Features
 
-- **Browserbase Cloud Support**: Drive Browserbase cloud browser sessions
+- **Browserbase Cloud Support**: Drive [Browserbase cloud](https://browserbase.com/) browser sessions
 - **AI-Driven Actions**: Use natural language instructions to interact with web pages
 - **Structured Data Extraction**: Extract typed data from pages using Serde schemas
 - **Element Observation**: Identify and analyze interactive elements on pages
