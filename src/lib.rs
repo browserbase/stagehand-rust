@@ -271,6 +271,9 @@ pub struct V3Options {
 /// Default Stagehand API URL
 pub const DEFAULT_STAGEHAND_API_URL: &str = "https://api.stagehand.browserbase.com/v1";
 
+/// Default Browserbase API URL
+pub const DEFAULT_BROWSERBASE_API_URL: &str = "https://api.browserbase.com/v1";
+
 /// Transport selection for connecting to Stagehand API
 #[derive(Debug, Clone, PartialEq)]
 pub enum TransportChoice {
@@ -1032,9 +1035,12 @@ impl Stagehand {
         let api_key = std::env::var("BROWSERBASE_API_KEY")
             .map_err(|_| StagehandError::MissingApiKey("BROWSERBASE_API_KEY".to_string()))?;
 
+        let browserbase_api_url = std::env::var("BROWSERBASE_API_URL")
+            .unwrap_or_else(|_| DEFAULT_BROWSERBASE_API_URL.to_string());
+
         let client = reqwest::Client::new();
         let response = client
-            .get(format!("https://api.browserbase.com/v1/sessions/{}", session_id))
+            .get(format!("{}/sessions/{}", browserbase_api_url, session_id))
             .header("x-bb-api-key", &api_key)
             .send()
             .await

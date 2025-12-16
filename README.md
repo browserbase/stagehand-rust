@@ -179,8 +179,9 @@ GROQ_API_KEY=your_groq_key                          # Groq
 CEREBRAS_API_KEY=your_cerebras_key                  # Cerebras
 DEEPSEEK_API_KEY=your_deepseek_key                  # DeepSeek
 
-# Optional: Custom Stagehand API URL (defaults to https://api.stagehand.browserbase.com/v1)
-STAGEHAND_API_URL=https://api.stagehand.browserbase.com/v1
+# Optional: Custom API URLs
+STAGEHAND_API_URL=https://api.stagehand.browserbase.com/v1  # Stagehand API (default)
+BROWSERBASE_API_URL=https://api.browserbase.com/v1          # Browserbase API (default)
 ```
 
 The SDK checks for model API keys in the order listed above and uses the first one found.
