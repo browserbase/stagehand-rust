@@ -15,7 +15,7 @@ A Rust client library for [Stagehand](https://stagehand.dev), the AI-powered bro
 
 ## Features
 
-- **Browserbase Cloud Support**: Drive [Browserbase cloud](https://browserbase.com/) browser sessions
+- **Browserbase Cloud Support**: Drive [Browserbase cloud](https://browserbase.com/) browser sessions (local coming soon)
 - **AI-Driven Actions**: Use natural language instructions to interact with web pages
 - **Structured Data Extraction**: Extract typed data from pages using Serde schemas
 - **Element Observation**: Identify and analyze interactive elements on pages
