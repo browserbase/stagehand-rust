@@ -269,7 +269,7 @@ pub struct V3Options {
 // =============================================================================
 
 /// Default Stagehand API URL
-pub const DEFAULT_STAGEHAND_API_URL: &str = "https://api.stagehand.browserbase.com/v1";
+pub const DEFAULT_STAGEHAND_BASE_URL: &str = "https://api.stagehand.browserbase.com/v1";
 
 /// Default Browserbase API URL
 pub const DEFAULT_BROWSERBASE_API_URL: &str = "https://api.browserbase.com/v1";
@@ -282,11 +282,11 @@ pub enum TransportChoice {
 }
 
 impl TransportChoice {
-    /// Create a REST transport using the URL from `STAGEHAND_API_URL` environment variable,
+    /// Create a REST transport using the URL from `STAGEHAND_BASE_URL` environment variable,
     /// or fall back to the default Stagehand API URL if not set.
     pub fn default_rest() -> Self {
-        let base_url = std::env::var("STAGEHAND_API_URL")
-            .unwrap_or_else(|_| DEFAULT_STAGEHAND_API_URL.to_string());
+        let base_url = std::env::var("STAGEHAND_BASE_URL")
+            .unwrap_or_else(|_| DEFAULT_STAGEHAND_BASE_URL.to_string());
         TransportChoice::Rest(base_url)
     }
 }

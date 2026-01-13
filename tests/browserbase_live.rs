@@ -15,7 +15,7 @@ async fn test_browserbase_live() -> Result<(), Box<dyn std::error::Error + Send 
     // Load environment variables from .env
     dotenvy::dotenv().ok();
 
-    // 1. Create client, specifying REST transport (uses STAGEHAND_API_URL env var or default)
+    // 1. Create client, specifying REST transport (uses STAGEHAND_BASE_URL env var or default)
     let mut stagehand = Stagehand::connect(TransportChoice::default_rest()).await?;
 
     // 2. Configure V3 Options
