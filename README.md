@@ -162,7 +162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // - BROWSERBASE_PROJECT_ID
     // - A model API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, etc.)
 
-    // 1. Connect to Stagehand cloud API (uses STAGEHAND_API_URL env var or default)
+    // 1. Connect to Stagehand cloud API (uses STAGEHAND_BASE_URL env var or default)
     let mut stagehand = Stagehand::connect(TransportChoice::default_rest()).await?;
 
     // 2. Start session
@@ -247,7 +247,7 @@ CEREBRAS_API_KEY=your_cerebras_key                  # Cerebras
 DEEPSEEK_API_KEY=your_deepseek_key                  # DeepSeek
 
 # Optional: Custom API URLs
-STAGEHAND_API_URL=https://api.stagehand.browserbase.com/v1  # Stagehand API (default)
+STAGEHAND_BASE_URL=https://api.stagehand.browserbase.com/v1  # Stagehand API (default)
 BROWSERBASE_API_URL=https://api.browserbase.com/v1          # Browserbase API (default)
 ```
 
@@ -317,12 +317,12 @@ pub async fn connect(
 
 **Parameters:**
 
-- `transport_choice` - `TransportChoice::Rest(base_url)` for REST API with explicit URL, or use `TransportChoice::default_rest()` to use the `STAGEHAND_API_URL` env var (falls back to default)
+- `transport_choice` - `TransportChoice::Rest(base_url)` for REST API with explicit URL, or use `TransportChoice::default_rest()` to use the `STAGEHAND_BASE_URL` env var (falls back to default)
 
 **Example:**
 
 ```rust
-// Using default (recommended) - checks STAGEHAND_API_URL env var, falls back to default
+// Using default (recommended) - checks STAGEHAND_BASE_URL env var, falls back to default
 let stagehand = Stagehand::connect(TransportChoice::default_rest()).await?;
 
 // Or with explicit URL
