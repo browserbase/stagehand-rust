@@ -160,7 +160,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Environment variables required:
     // - BROWSERBASE_API_KEY
     // - BROWSERBASE_PROJECT_ID
-    // - A model API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, etc.)
+    // - MODEL_API_KEY (LLM provider API key)
 
     // 1. Connect to Stagehand cloud API (uses STAGEHAND_BASE_URL env var or default)
     let mut stagehand = Stagehand::connect(TransportChoice::default_rest()).await?;
