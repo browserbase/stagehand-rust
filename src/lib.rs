@@ -343,6 +343,38 @@ pub trait Transport: Send + Sync {
 }
 
 // =============================================================================
+// Frame ID Helpers (chromiumoxide integration)
+// =============================================================================
+
+/// Convert a chromiumoxide `Page` to the Stagehand `frame_id` (CDP frame id).
+///
+/// This calls `Page.getFrameTree` over CDP and returns `frameTree.frame.id`.
+#[cfg(feature = "chromiumoxide-page")]
+pub async fn chromiumoxide_page_to_frame_id(
+    page: &chromiumoxide::page::Page,
+) -> Result<String, StagehandError> {
+    use chromiumoxide::cdp::browser_protocol::page::GetFrameTreeParams;
+
+    let resp = page
+        .execute(GetFrameTreeParams::default())
+        .await
+        .map_err(|e| StagehandError::Api(format!("Failed to call Page.getFrameTree via chromiumoxide: {e}")))?;
+
+    Ok(resp.result.frame_tree.frame.id.inner().clone())
+}
+
+/// Backwards-compatible naming for the chromiumoxide helper.
+///
+/// Despite the name, this returns the Stagehand `frame_id` (CDP frame id), which is
+/// what Stagehand methods expect as their `frame_id` parameter.
+#[cfg(feature = "chromiumoxide-page")]
+pub async fn rust_chromeoxide_page_to_target_id(
+    page: &chromiumoxide::page::Page,
+) -> Result<String, StagehandError> {
+    chromiumoxide_page_to_frame_id(page).await
+}
+
+// =============================================================================
 // REST Transport Implementation
 // =============================================================================
 

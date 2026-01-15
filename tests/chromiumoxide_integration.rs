@@ -101,7 +101,12 @@ async fn test_chromiumoxide_browserbase_connection(
         .await?;
     println!("   Page loaded successfully!");
 
-    // 5. Now use Stagehand's AI-powered methods on the same browser session
+    // 5. Resolve the Stagehand `frame_id` for the chromiumoxide `Page`
+    println!("5. Resolving Stagehand frame_id from chromiumoxide page...");
+    let frame_id = stagehand_sdk::rust_chromeoxide_page_to_target_id(&page).await?;
+    println!("   frame_id: {}", frame_id);
+
+    // 6. Now use Stagehand's AI-powered methods on the same browser session
     println!("5. Using Stagehand AI to extract data from the same session...");
 
     // Schema must be in JSON Schema format
@@ -120,7 +125,7 @@ async fn test_chromiumoxide_browserbase_connection(
             None,
             Some(30_000),
             None,
-            None,
+            Some(frame_id.clone()),
         )
         .await?;
 
@@ -135,7 +140,7 @@ async fn test_chromiumoxide_browserbase_connection(
         }
     }
 
-    // 6. Use Stagehand to click the "More information..." link
+    // 7. Use Stagehand to click the "More information..." link
     println!("6. Using Stagehand AI to click the link...");
 
     let mut act_stream = stagehand
@@ -144,7 +149,7 @@ async fn test_chromiumoxide_browserbase_connection(
             None,
             HashMap::new(),
             Some(30_000),
-            None,
+            Some(frame_id.clone()),
         )
         .await?;
 
