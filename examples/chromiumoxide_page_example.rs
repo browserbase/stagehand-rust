@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("   Chromiumoxide navigation complete.\n");
 
     println!("6. Resolving Stagehand frame_id from chromiumoxide page...");
-    let frame_id = stagehand_sdk::rust_chromeoxide_page_to_target_id(&page).await?;
+    let frame_id = stagehand_sdk::chromiumoxide_page_to_frame_id(&page).await?;
     println!("   frame_id: {frame_id}\n");
 
     println!("7. Stagehand.observe(frame_id=...) ...");

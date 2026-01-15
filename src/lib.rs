@@ -363,17 +363,6 @@ pub async fn chromiumoxide_page_to_frame_id(
     Ok(resp.result.frame_tree.frame.id.inner().clone())
 }
 
-/// Backwards-compatible naming for the chromiumoxide helper.
-///
-/// Despite the name, this returns the Stagehand `frame_id` (CDP frame id), which is
-/// what Stagehand methods expect as their `frame_id` parameter.
-#[cfg(feature = "chromiumoxide-page")]
-pub async fn rust_chromeoxide_page_to_target_id(
-    page: &chromiumoxide::page::Page,
-) -> Result<String, StagehandError> {
-    chromiumoxide_page_to_frame_id(page).await
-}
-
 // =============================================================================
 // REST Transport Implementation
 // =============================================================================

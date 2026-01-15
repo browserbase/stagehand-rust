@@ -103,7 +103,7 @@ async fn test_chromiumoxide_browserbase_connection(
 
     // 5. Resolve the Stagehand `frame_id` for the chromiumoxide `Page`
     println!("5. Resolving Stagehand frame_id from chromiumoxide page...");
-    let frame_id = stagehand_sdk::rust_chromeoxide_page_to_target_id(&page).await?;
+    let frame_id = stagehand_sdk::chromiumoxide_page_to_frame_id(&page).await?;
     println!("   frame_id: {}", frame_id);
 
     // 6. Now use Stagehand's AI-powered methods on the same browser session
