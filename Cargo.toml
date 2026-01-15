@@ -35,6 +35,7 @@ tokio-stream = { version = "0.1", optional = true }
 async-std = { version = "1", features = ["attributes"], optional = true }
 
 [dev-dependencies]
+# Used only by opt-in examples / integration tests.
 chromiumoxide = { version = "0.8.0", features = ["tokio-runtime"] }
 # TLS support for WSS connections to Browserbase
 async-tungstenite = { version = "0.32", features = ["tokio-native-tls", "tokio-runtime"] }
