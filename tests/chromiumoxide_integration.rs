@@ -8,7 +8,7 @@
 //! 5. Optionally uses Stagehand's AI-powered methods alongside direct CDP control
 
 use chromiumoxide::browser::Browser;
-use chromiumoxide::cdp::browser_protocol::page::NavigateParams;
+use chromiumoxide::cdp::browser_protocol::page::{GetFrameTreeParams, NavigateParams};
 use futures::StreamExt;
 use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent};
 use stagehand_sdk::{Env, Model, Stagehand, TransportChoice, V3Options};
@@ -101,9 +101,9 @@ async fn test_chromiumoxide_browserbase_connection(
         .await?;
     println!("   Page loaded successfully!");
 
-    // 5. Resolve the Stagehand `frame_id` for the chromiumoxide `Page`
+    // 5. Resolve the Stagehand `frame_id` for the chromiumoxide `Page` (CDP Page.getFrameTree)
     println!("5. Resolving Stagehand frame_id from chromiumoxide page...");
-    let frame_id = stagehand_sdk::chromiumoxide_page_to_frame_id(&page).await?;
+    let frame_id = page.execute(GetFrameTreeParams::default()).await?.result.frame_tree.frame.id.inner().clone();
     println!("   frame_id: {}", frame_id);
 
     // 6. Now use Stagehand's AI-powered methods on the same browser session

@@ -15,7 +15,7 @@
 //! - STAGEHAND_BASE_URL (defaults to https://api.stagehand.browserbase.com/v1)
 
 use chromiumoxide::browser::Browser;
-use chromiumoxide::cdp::browser_protocol::page::NavigateParams;
+use chromiumoxide::cdp::browser_protocol::page::{GetFrameTreeParams, NavigateParams};
 use futures::StreamExt;
 use stagehand_sdk::{
     ActResponseEvent, Env, ExtractResponseEvent, Model, ObserveResponseEvent, Stagehand,
@@ -71,8 +71,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     println!("   Chromiumoxide navigation complete.\n");
 
-    println!("6. Resolving Stagehand frame_id from chromiumoxide page...");
-    let frame_id = stagehand_sdk::chromiumoxide_page_to_frame_id(&page).await?;
+    println!("6. Resolving Stagehand frame_id from chromiumoxide page via Page.getFrameTree...");
+      let frame_tree = page.execute(GetFrameTreeParams::default()).await?.result.frame_tree;
+      let frame_id = frame_tree.frame.id.inner().clone();
     println!("   frame_id: {frame_id}\n");
 
     println!("7. Stagehand.observe(frame_id=...) ...");

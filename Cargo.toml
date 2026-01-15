@@ -13,7 +13,6 @@ readme = "README.md"
 default = ["tokio-runtime"]
 tokio-runtime = ["tokio", "tokio-stream"]
 async-std-runtime = ["async-std"]
-chromiumoxide-page = ["chromiumoxide"]
 
 [dependencies]
 # Runtime-agnostic
@@ -27,7 +26,6 @@ bytes = "1"
 eventsource-client = "0.15.1"
 dotenvy = "0.15"
 async-trait = "0.1.89"
-chromiumoxide = { version = "0.8.0", features = ["tokio-runtime"], optional = true }
 
 # Tokio runtime (optional, default)
 tokio = { version = "1", features = ["sync", "rt", "macros", "rt-multi-thread"], optional = true }
@@ -37,15 +35,7 @@ tokio-stream = { version = "0.1", optional = true }
 async-std = { version = "1", features = ["attributes"], optional = true }
 
 [dev-dependencies]
+# Used only by opt-in examples / integration tests.
+chromiumoxide = { version = "0.8.0", features = ["tokio-runtime"] }
 # TLS support for WSS connections to Browserbase
 async-tungstenite = { version = "0.32", features = ["tokio-native-tls", "tokio-runtime"] }
-
-[[example]]
-name = "chromiumoxide_page_example"
-path = "examples/chromiumoxide_page_example.rs"
-required-features = ["chromiumoxide-page"]
-
-[[test]]
-name = "chromiumoxide_integration"
-path = "tests/chromiumoxide_integration.rs"
-required-features = ["chromiumoxide-page"]
