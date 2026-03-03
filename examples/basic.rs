@@ -1,7 +1,5 @@
 use stagehand_sdk::{
-    ActResponseEvent, AgentConfig, AgentExecuteOptions, Env, ExecuteResponseEvent,
-    ExtractResponseEvent, Model, ModelConfiguration, ObserveResponseEvent, Stagehand,
-    TransportChoice, V3Options,
+    ActResponseEvent, AgentConfig, AgentExecuteOptions, Env, ExecuteResponseEvent, ExtractResponseEvent, Model, ModelConfiguration, NavigateResponseEvent, ObserveResponseEvent, Stagehand, TransportChoice, V3Options
 };
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -44,19 +42,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // 3. Navigate to https://news.ycombinator.com
     println!("3. Navigating to Hacker News...");
-    let mut act_stream = stagehand
-        .act(
-            "Navigate to https://news.ycombinator.com",
-            None,
-            HashMap::new(),
-            Some(60_000),
-            None,
-        )
+    let mut nav_stream = stagehand
+        .navigate("https://news.ycombinator.com", None, None)
         .await?;
 
-    while let Some(res) = act_stream.next().await {
+    while let Some(res) = nav_stream.next().await {
         if let Ok(response) = res {
-            if let Some(ActResponseEvent::Success(success)) = response.event {
+            if let Some(NavigateResponseEvent::Success(success)) = response.event {
                 println!("   Navigation success: {}\n", success);
             }
         }

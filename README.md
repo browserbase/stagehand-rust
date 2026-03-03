@@ -141,7 +141,7 @@ async-std = { version = "1", features = ["attributes"] }
 
 ```rust
 use stagehand_sdk::{Stagehand, V3Options, Env, Model, TransportChoice};
-use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent};
+use stagehand_sdk::{ActResponseEvent, ExtractResponseEvent, NavigateResponseEvent};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -177,17 +177,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("Session ID: {:?}", stagehand.session_id());
 
     // 3. Navigate to a page
-    let mut act_stream = stagehand.act(
-        "Go to https://quotes.toscrape.com/",
-        None,
-        HashMap::new(),
-        Some(60_000),
-        None,
-    ).await?;
+    let mut nav_stream = stagehand
+        .navigate("https://quotes.toscrape.com/", None, None)
+        .await?;
 
-    while let Some(res) = act_stream.next().await {
+    while let Some(res) = nav_stream.next().await {
         if let Ok(response) = res {
-            if let Some(ActResponseEvent::Success(success)) = response.event {
+            if let Some(NavigateResponseEvent::Success(success)) = response.event {
                 println!("Navigation success: {}", success);
             }
         }
