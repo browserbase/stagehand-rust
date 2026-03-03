@@ -11,6 +11,7 @@ struct PageInfo {
 }
 
 #[tokio::test]
+#[ignore = "requires live Browserbase and model provider credentials"]
 async fn test_browserbase_live() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Load environment variables from .env
     dotenvy::dotenv().ok();

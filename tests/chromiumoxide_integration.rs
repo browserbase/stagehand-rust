@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 /// Test that creates a Browserbase session via Stagehand and connects chromiumoxide to it
 #[tokio::test]
+#[ignore = "requires live Browserbase and model provider credentials"]
 async fn test_chromiumoxide_browserbase_connection(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Load environment variables
